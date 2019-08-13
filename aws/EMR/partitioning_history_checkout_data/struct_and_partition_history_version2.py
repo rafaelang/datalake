@@ -1,4 +1,4 @@
-# conding: utf-8
+# coding: utf-8
 
 from pyspark.sql.functions import UserDefinedFunction
 from pyspark.sql.types import *
@@ -20,11 +20,22 @@ history_datapath = 's3://vtex-analytics-import/vtex-checkout-versioned/00_Checko
 df = spark.read.json(history_datapath)
 
 
+### Auxiliary Functions
+
+from pyspark.sql.utils import AnalysisException
+def has_column(df, col):
+    try:
+        df[col]
+        return True
+    except AnalysisException:
+        return False
+
+    
 ### Converting data with spark
 
 #### Casting Items
 
-# Get Item Type
+##### Get Item Type
 types = filter(lambda f: f.name == "Items", structured_df.schema.fields)
 itemType = types[0].dataType
 
@@ -42,10 +53,10 @@ def convert_item(data):
 
     return items
 
-# Register functions as Spark UDFs 
 udf_getData = UserDefinedFunction(convert_item, itemType)
 
-df = df.withColumn('Items', udf_getData("Items"))
+if has_column(df, 'Items'):
+    df = df.withColumn('Items', udf_getData("Items"))
 
 
 #### Casting de ItemMetadata
@@ -62,10 +73,10 @@ def convert_item_metadata(data):
                 del itemmetadata["items"][i]["assemblyOptions"]
         return itemmetadata
         
-# Register functions as Spark UDFs 
 udf_convert_item_metadata = UserDefinedFunction(convert_item_metadata, item_metadata_type)
 
-df = df.withColumn("ItemMetadata", udf_convert_item_metadata("ItemMetadata"))
+if has_column(df, "ItemMetadata"):
+    df = df.withColumn("ItemMetadata", udf_convert_item_metadata("ItemMetadata"))
 
 
 #### Casting RateAndBenefits
@@ -87,10 +98,10 @@ def convert_ratesandbenefits(data):
                 del data[KEY_IDENTIFIERS][i][KEY_ADDINFO]
     return data
         
-# Register functions as Spark UDFs 
 udf_convert_ratesandbenefits = UserDefinedFunction(convert_ratesandbenefits, rateandbenefits_type)
 
-df = df.withColumn("RatesAndBenefitsData", udf_convert_ratesandbenefits("RatesAndBenefitsData"))
+if has_column(df, 'RatesAndBenefitsData'):
+    df = df.withColumn("RatesAndBenefitsData", udf_convert_ratesandbenefits("RatesAndBenefitsData"))
 
 
 #### Casting CustomData
@@ -111,10 +122,11 @@ def convert_customdata(data):
                     del customdata[KEY_CUSTOMAPP][i][KEY_FIELDS][KEY_EXTRA_CONTENT]
     return customdata
         
-# Register functions as Spark UDFs 
 udf_convert_customdata = UserDefinedFunction(convert_customdata, customdata_type)
 
-df = df.withColumn("CustomData", udf_convert_customdata("CustomData"))
+if has_column(df, 'CustomData'):
+    df = df.withColumn("CustomData", udf_convert_customdata("CustomData"))
+
 
 #### Structuring the remaining data that is not string
 
