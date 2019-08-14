@@ -1,10 +1,14 @@
-# coding: utf-8
+# conding: utf-8
+from pyspark.context import SparkContext
+from pyspark.sql.session import SparkSession
 
 from pyspark.sql.functions import UserDefinedFunction
 from pyspark.sql.types import *
 
 import json
 
+sc = SparkContext('local')
+spark = SparkSession(sc)
 
 ### Getting Schema's Interface from Checkout Structured Json
 
@@ -203,4 +207,4 @@ df = df.withColumn('DAY', udf_getDay(df.LastChange, df.CreationDate))
 ### Writing data into S3 bucket
 
 # Save table to S3 using Parquet format and partitioning by defined columns
-df.write.partitionBy(['YEAR','MONTH','DAY','InstanceId']).mode('append').parquet('s3://vtex.datalake/consumable_tables/checkout')
+df.write.partitionBy(['YEAR','MONTH','DAY','InstanceId']).mode('append').parquet('s3://vtex.datalake/consumable_tables/test')
