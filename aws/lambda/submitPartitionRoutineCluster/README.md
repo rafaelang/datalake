@@ -13,8 +13,13 @@ There is an role called VtexDatalakeLambdaEC2Access with the following polices:
 
 
 ### Env vars
-This lambda needs these vars:
+
+This lambda needs these vars: 
+
     - LOG_DEST_S3_URI
-        * s3 uri where save logs. ex: s3://aws-logs
-    - SCRIPT_S3_URI
-        * s3 uri where is located the script to be submitted, ex: s3://vtex.datalake/scripts/script.py
+        - s3 uri where save logs 
+        - ex: s3://aws-logs-282989224251-us-east-2/elasticmapreduce/partition_routine/clusters/  
+        
+    - SCRIPT_S3_URI  
+        - s3 uri where is located the script to be submitted 
+        - ex: s3://vtex.datalake/scripts/script.py  

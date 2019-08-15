@@ -26,14 +26,17 @@ def lambda_handler(event, context):
             {
                 'Name': 'Spark'
             },
-        ],
+            {
+                'Name': 'ganglia'
+            },
+        ],        
         Instances={
             'InstanceGroups': [
                 {
                     'Name': "Master nodes",
                     'Market': 'ON_DEMAND',
                     'InstanceRole': 'MASTER',
-                    'InstanceType': 'r5.xlarge',
+                    'InstanceType': 'm4.2xlarge',
                     'InstanceCount': 1,
                 },
                 {
@@ -42,17 +45,10 @@ def lambda_handler(event, context):
                     'InstanceRole': 'CORE',
                     'InstanceType': 'r5.xlarge',
                     'InstanceCount': 1,
-                },
-                {
-                    'Name': "Slave nodes",
-                    'Market': 'ON_DEMAND',
-                    'InstanceRole': 'TASK',
-                    'InstanceType': 'r5.xlarge',
-                    'InstanceCount': 2,
-                },            
+                },         
             ],
             'Ec2KeyName': 'dev_datalake',
-            'KeepJobFlowAliveWhenNoSteps': False,
+            'KeepJobFlowAliveWhenNoSteps': True,
             'TerminationProtected': False,
             'Ec2SubnetId': 'subnet-11e84e5d',
         },        
@@ -81,4 +77,3 @@ def lambda_handler(event, context):
     )
     
     logger.info('Cluster {} created with the step.'.format(cluster_id['JobFlowId']))
-    
