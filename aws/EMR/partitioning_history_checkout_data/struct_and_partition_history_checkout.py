@@ -178,9 +178,12 @@ udf_getDay = UserDefinedFunction(getDay, StringType())
 
 ### Create the Columns for the Partitions
 def create_partition_columns(df):
-    df = df.withColumn('YEAR', udf_getYear(df.LastChange, df.CreationDate))
-    df = df.withColumn('MONTH', udf_getMonth(df.LastChange, df.CreationDate))
-    df = df.withColumn('DAY', udf_getDay(df.LastChange, df.CreationDate))
+    new_data_frame = df
+    new_data_frame = new_data_frame.withColumn('YEAR', udf_getYear(new_data_frame.LastChange, new_data_frame.CreationDate))
+    new_data_frame = new_data_frame.withColumn('MONTH', udf_getMonth(new_data_frame.LastChange, new_data_frame.CreationDate))
+    new_data_frame = new_data_frame.withColumn('DAY', udf_getDay(new_data_frame.LastChange, new_data_frame.CreationDate))
+
+    return new_data_frame
 
 ### Converting data with spark
 def struct_data_frame(df):
@@ -197,16 +200,22 @@ def struct_data_frame(df):
 
 def main():
     hexadecimal_sequence = '0123456789ABCDEF'
+    index_folder = '0'
     for hexadecimal in hexadecimal_sequence:
         ### Reading data from Checkout History
-        directory_path = '0' + hexadecimal + '_CheckoutOrder/'
+        directory_path = index_folder + hexadecimal + '_CheckoutOrder/'
         history_data_path = 's3://vtex-analytics-import/vtex-checkout-versioned/' + directory_path + '*/id/*'
         df = spark.read.json(history_data_path)
 
         df = struct_data_frame(df)
+        df = create_partition_columns(df)
 
         ### Writing data into S3 bucket
         #### Save table to S3 using Parquet format and partitioning by defined columns
-        df.coalesce(1).write.partitionBy(['YEAR','MONTH','DAY','InstanceId']).mode('append').parquet('s3://vtex.datalake/consumable_tables/checkout')
+        df.repartition('YEAR','MONTH','DAY','InstanceId')\
+            .write\
+            .partitionBy('YEAR','MONTH','DAY','InstanceId')\
+            .mode('append')\
+            .parquet('s3://vtex.datalake/consumable_tables/test')
 
 main()
