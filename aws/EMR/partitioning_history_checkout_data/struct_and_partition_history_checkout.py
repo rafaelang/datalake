@@ -216,6 +216,6 @@ def main():
             .write\
             .partitionBy('YEAR','MONTH','DAY','InstanceId')\
             .mode('append')\
-            .parquet('s3://vtex.datalake/consumable_tables/test')
+            .parquet('s3://vtex.datalake/consumable_tables/checkout')
 
 main()
