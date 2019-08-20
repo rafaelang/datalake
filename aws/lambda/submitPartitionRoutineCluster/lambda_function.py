@@ -13,6 +13,7 @@ emr_client = boto3.client('emr', region_name='us-east-2')
 # ENV variables
 SCRIPT_S3_URI = os.getenv('SCRIPT_S3_URI') 
 LOG_DEST_S3_URI = os.getenv('LOG_DEST_S3_URI')
+REQUIREMENTS_SCRIPT_S3_URI =  os.getenv('REQUIREMENTS_SCRIPT_S3_URI')
 
 SCRIPT_NAME = SCRIPT_S3_URI.split('/')[-1]
 HOME_HADOOP = '/home/hadoop/'
@@ -48,10 +49,18 @@ def lambda_handler(event, context):
                 },         
             ],
             'Ec2KeyName': 'dev_datalake',
-            'KeepJobFlowAliveWhenNoSteps': True,
+            'KeepJobFlowAliveWhenNoSteps': False,
             'TerminationProtected': False,
             'Ec2SubnetId': 'subnet-11e84e5d',
-        },        
+        },
+        BootstrapActions=[
+            {
+                'Name': 'Get install requirements script',
+                'ScriptBootstrapAction': {
+                    'Path': REQUIREMENTS_SCRIPT_S3_URI,
+                }
+            },
+        ],        
         Steps=[
             {
                 'Name': 'Get pyspark script',
@@ -60,7 +69,7 @@ def lambda_handler(event, context):
                     'Jar': 'command-runner.jar',
                     'Args': ['aws', 's3', 'cp', SCRIPT_S3_URI, HOME_HADOOP]
                 }
-            },
+            },           
             {
                 'Name': 'Run pyspark script',
                 'ActionOnFailure': 'CONTINUE',
