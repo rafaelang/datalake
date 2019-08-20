@@ -11,12 +11,31 @@ logger.setLevel(getattr(logging, os.getenv('LOG_LEVEL', 'INFO')))
 emr_client = boto3.client('emr', region_name='us-east-2')
 
 # ENV variables
-SCRIPT_S3_URI = os.getenv('SCRIPT_S3_URI') 
-LOG_DEST_S3_URI = os.getenv('LOG_DEST_S3_URI')
-REQUIREMENTS_SCRIPT_S3_URI =  os.getenv('REQUIREMENTS_SCRIPT_S3_URI')
+SCRIPT_S3_URI = os.getenv(
+    'SCRIPT_S3_URI',
+    's3://vtex.datalake/scripts/partition_routine/partition.py'
+) 
+LOG_DEST_S3_URI = os.getenv(
+    'LOG_DEST_S3_URI',
+    's3://aws-logs-282989224251-us-east-2/elasticmapreduce/partition_routine/clusters/'
+)
+REQUIREMENTS_SCRIPT_S3_URI =  os.getenv(
+    'REQUIREMENTS_SCRIPT_S3_URI',
+    's3://vtex.datalake/scripts/partition_routine/install_requirements.sh'
+)
+DESTINATION_S3_URI_PREFIX = os.getenv(
+    'DESTINATION_S3_URI_PREFIX',
+    's3://vtex.datalake/consumable_tables/'
+)
+DATASRC_S3_PREFIX = os.getenv(
+    'DATASRC_S3_PREFIX',
+    's3://vtex.datalake/stage/checkout_data/'
+)
 
 SCRIPT_NAME = SCRIPT_S3_URI.split('/')[-1]
 HOME_HADOOP = '/home/hadoop/'
+CHECKOUT = 'checkout'
+FULFILLMENT = 'fulfillment'
 
 
 def lambda_handler(event, context):
@@ -71,13 +90,25 @@ def lambda_handler(event, context):
                 }
             },           
             {
-                'Name': 'Run pyspark script',
+                'Name': 'Run pyspark script for CHECKOUT',
                 'ActionOnFailure': 'CONTINUE',
                 'HadoopJarStep': {
                     'Jar': 'command-runner.jar',
-                    'Args': ['spark-submit', HOME_HADOOP + SCRIPT_NAME]
+                    'Args': ['spark-submit', HOME_HADOOP + SCRIPT_NAME,
+                        '--destination-path', DESTINATION_S3_URI_PREFIX + CHECKOUT + '/',
+                        '--datasrc-s3', DATASRC_S3_PREFIX + CHECKOUT + "order/"]
                 }
-            }
+            },
+            {
+                'Name': 'Run pyspark script for FULFILLMENT',
+                'ActionOnFailure': 'CONTINUE',
+                'HadoopJarStep': {
+                    'Jar': 'command-runner.jar',
+                    'Args': ['spark-submit', HOME_HADOOP + SCRIPT_NAME,
+                        '--destination-path', DESTINATION_S3_URI_PREFIX + FULFILLMENT + '/',
+                        '--datasrc-s3', DATASRC_S3_PREFIX + FULFILLMENT + "order/"]
+                }
+            }            
         ],            
         JobFlowRole='EMR_EC2_DefaultRole',
         ServiceRole='EMR_DefaultRole',
