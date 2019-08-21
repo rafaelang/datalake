@@ -77,9 +77,11 @@ def create_partition_columns(df):
 
 def _read_args():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--destination-path', 
+    parser.add_argument(
+        '--destination-path', 
         help='S3 URI where save parquet files', \
-        default='s3://vtex.datalake/consumable_tables/')
+        default='s3://vtex.datalake/consumable_tables/'
+    )
     parser.add_argument('--datasrc-s3')        
     args=parser.parse_args()
     return args.datasrc_s3, args.destination_path
@@ -93,4 +95,9 @@ if __name__ == "__main__":
     df = create_partition_columns(df)
 
     #### Save table to S3 using Parquet format and partitioning by defined columns
-    df.write.partitionBy(['YEAR','MONTH','DAY','InstanceId']).mode('append').parquet(destination_path)
+    df \
+        .repartition('YEAR','MONTH','DAY','InstanceId') \
+        .write \
+        .partitionBy(['YEAR','MONTH','DAY','InstanceId']) \
+        .mode('append') \
+        .parquet(destination_path)
