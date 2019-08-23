@@ -99,8 +99,8 @@ if __name__ == "__main__":
 
     #### Save table to S3 using Parquet format and partitioning by defined columns
     df \
-        .repartition('YEAR','MONTH','DAY','InstanceId') \
+        .repartition('YEAR','MONTH','DAY') \
         .write \
-        .partitionBy(['YEAR','MONTH','DAY','InstanceId']) \
+        .partitionBy(['YEAR','MONTH','DAY']) \
         .mode('append') \
         .parquet(destination_path)
