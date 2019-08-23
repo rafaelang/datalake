@@ -13,9 +13,6 @@ from pytz import timezone
 import sys, os, argparse
 
 
-### Config SparkContext
-spark = SparkSession.builder.master("local").appName("Partition").getOrCreate()
-
 def get_last_hour_date(timezone_str='UTC'):
     class MTime(object):
         def __init__(self, y_str, m_str, d_str, h_str, min_str, s_srt):
@@ -89,6 +86,12 @@ def _read_args():
 
 if __name__ == "__main__":
     datasrc_s3, destination_path = _read_args()
+
+    ### Config SparkContext
+    spark = SparkSession \
+        .builder \
+        .appName("Partition") \
+        .getOrCreate()
 
     datapath = get_dataset_path(datasrc_s3)
     df = spark.read.parquet(datapath)

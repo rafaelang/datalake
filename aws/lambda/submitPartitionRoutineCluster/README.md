@@ -23,3 +23,15 @@ This lambda needs these vars:
     - SCRIPT_S3_URI  
         - s3 uri where is located the script to be submitted 
         - ex: s3://vtex.datalake/scripts/script.py  
+
+    - REQUIREMENTS_SCRIPT_S3_URI
+        - s3 uri where is located script to install dependencies to run partition script
+        - ex: s3://vtex.datalake/scripts/partition_routine/install_requirements.sh
+
+    - DESTINATION_S3_URI_PREFIX
+        - s3 uri where processed data will be stored
+        - ex: s3://vtex.datalake/consumable_tables/
+
+    - DATASRC_S3_PREFIX
+        - s3 uri for dataset to read
+        - ex: s3://vtex.datalake/stage/checkout_data/

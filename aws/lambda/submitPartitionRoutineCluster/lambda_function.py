@@ -64,16 +64,9 @@ def lambda_handler(event, context):
                     'Name': "Slave nodes",
                     'Market': 'ON_DEMAND',
                     'InstanceRole': 'CORE',
-                    'InstanceType': 'r4.xlarge',
-                    'InstanceCount': 1,
-                },         
-                {
-                    'Name': "Slave nodes",
-                    'Market': 'ON_DEMAND',
-                    'InstanceRole': 'TASK',
                     'InstanceType': 'r5.xlarge',
                     'InstanceCount': 1,
-                },   
+                }  
             ],
             'Ec2KeyName': 'dev_datalake',
             'KeepJobFlowAliveWhenNoSteps': False,
