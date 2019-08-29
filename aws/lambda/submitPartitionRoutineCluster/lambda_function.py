@@ -42,7 +42,7 @@ FULFILLMENT = 'fulfillment'
 def lambda_handler(event, context):
     cluster_id = emr_client.run_job_flow(
         Name='PartitionRoutine || ' + time.strftime("%Y/%m/%d %H:%M:%S"),
-        ReleaseLabel='emr-5.25.0',
+        ReleaseLabel='emr-5.26.0',
         Applications=[
             {
                 'Name': 'Spark'
