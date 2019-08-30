@@ -23,7 +23,7 @@ def get_schema_type(name_column, structured_df):
 
     return itemType
 
-### Returns a boolean indicates if existis column into data frame.
+### Returns a boolean indicating if exists column in dataframe.
 def has_column(df, col):
     try:
         df[col]
