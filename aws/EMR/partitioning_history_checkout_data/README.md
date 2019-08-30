@@ -16,4 +16,4 @@ To execute the function `struct_and_partition_history_checkout`, must create a c
 This `struct_and_partition_history_checkout` needs this var to run: 
 
     - FIRST_PREFIX_PATH
-        - The first prefix of path indicates how folder will be readed. For example, when pass the var with value __0__, the function'll converter the data from **00CheckoutOrder** to **0FCheckoutOrder**.
+        - The first prefix of path indicates how folder will be readed. For example, when pass the var with value 0, the function'll converter the data from **00CheckoutOrder** to **0FCheckoutOrder**.
