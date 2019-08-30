@@ -111,7 +111,7 @@ def load_objects_json(df, structured_df):
     return df
 
 
-#### Remove keys with Attachment content, buecause it is not necessary for development. 
+#### Remove keys with Attachment content, buecause it is not necessary for data analyse. 
 def remove_attachments(df):
     def _remove_attachments_key(dic):
         dic_copy = dic.copy()
@@ -194,7 +194,7 @@ def main():
     structured_jsons_path = 's3://vtex.datalake/structured_json/checkout/00_CheckoutOrder/*/id/*'
     structured_df = spark.read.json(structured_jsons_path)
 
-    index_folder = '0'
+    index_folder = '0' # Must be replaced for each folder index
     hexadecimal_sequence = '0123456789ABCDEF'
     for hexadecimal in hexadecimal_sequence:
         ### Reading data from Checkout History
@@ -212,5 +212,7 @@ def main():
             .partitionBy('YEAR','MONTH','DAY')\
             .mode('append')\
             .parquet('s3://vtex.datalake/consumable_tables/checkout')
+
+        print("Complete checkout folder: {}{}".format(index_folder, hexadecimal_sequence))
 
 main()
