@@ -7,6 +7,7 @@ from pyspark.sql.types import *
 
 from pyspark.sql.utils import AnalysisException
 
+import argparse
 import json
 
 spark = SparkSession \
@@ -189,16 +190,27 @@ def struct_data_frame(df, structured_df):
     return df
 
 
+def _read_args():
+    parser=argparse.ArgumentParser()
+    parser.add_argument(
+        '--first-prefix-path', 
+        help="Based on checkout bucket architecture, first prefix for folder to process", \
+        default='0'
+    )
+    args=parser.parse_args()
+    return args.first_prefix_path
+
 def main():
+    first_prefix_path = _read_args()
+
     ### Getting Schema's Interface from Checkout Structured Json
     structured_jsons_path = 's3://vtex.datalake/structured_json/checkout/00_CheckoutOrder/*/id/*'
     structured_df = spark.read.json(structured_jsons_path)
 
-    index_folder = '0' # Must be replaced for each folder index
     hexadecimal_sequence = '0123456789ABCDEF'
     for hexadecimal in hexadecimal_sequence:
         ### Reading data from Checkout History
-        directory_path = index_folder + hexadecimal + '_CheckoutOrder/'
+        directory_path = first_prefix_path + hexadecimal + '_CheckoutOrder/'
         history_data_path = 's3://vtex-analytics-import/vtex-checkout-versioned/' + directory_path + '*/id/*'
         df = spark.read.json(history_data_path)
 
@@ -213,6 +225,6 @@ def main():
             .mode('append')\
             .parquet('s3://vtex.datalake/consumable_tables/checkout')
 
-        print("Complete checkout folder: {}{}".format(index_folder, hexadecimal_sequence))
+        print("Complete checkout folder: {}{}".format(first_prefix_path, hexadecimal_sequence))
 
 main()
