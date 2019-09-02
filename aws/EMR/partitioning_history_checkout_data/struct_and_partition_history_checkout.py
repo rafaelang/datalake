@@ -193,38 +193,36 @@ def struct_data_frame(df, structured_df):
 def _read_args():
     parser=argparse.ArgumentParser()
     parser.add_argument(
-        '--first-prefix-path', 
+        '--prefix-path', 
         help="Based on checkout bucket architecture, first prefix for folder to process", \
-        default='0'
+        default='00'
     )
     args=parser.parse_args()
-    return args.first_prefix_path
+    return args.prefix_path
 
 def main():
-    first_prefix_path = _read_args()
+    prefix_path = _read_args()
 
     ### Getting Schema's Interface from Checkout Structured Json
     structured_jsons_path = 's3://vtex.datalake/structured_json/checkout/00_CheckoutOrder/*/id/*'
     structured_df = spark.read.json(structured_jsons_path)
 
-    hexadecimal_sequence = '0123456789ABCDEF'
-    for hexadecimal in hexadecimal_sequence:
-        ### Reading data from Checkout History
-        directory_path = first_prefix_path + hexadecimal + '_CheckoutOrder/'
-        history_data_path = 's3://vtex-analytics-import/vtex-checkout-versioned/' + directory_path + '*/id/*'
-        df = spark.read.json(history_data_path)
+    ### Reading data from Checkout History
+    directory_path = prefix_path + '_CheckoutOrder/'
+    history_data_path = 's3://vtex-analytics-import/vtex-checkout-versioned/' + directory_path + '*/id/*'
+    df = spark.read.json(history_data_path)
 
-        df = struct_data_frame(df, structured_df)
-        df = create_partition_columns(df)
+    df = struct_data_frame(df, structured_df)
+    df = create_partition_columns(df)
 
-        ### Writing data into S3 bucket
-        #### Save table to S3 using Parquet format and partitioning by defined columns
-        df.repartition('YEAR','MONTH','DAY')\
-            .write\
-            .partitionBy('YEAR','MONTH','DAY')\
-            .mode('append')\
-            .parquet('s3://vtex.datalake/consumable_tables/checkout')
+    ### Writing data into S3 bucket
+    #### Save table to S3 using Parquet format and partitioning by defined columns
+    df.repartition('YEAR','MONTH','DAY')\
+        .write\
+        .partitionBy('YEAR','MONTH','DAY')\
+        .mode('append')\
+        .parquet('s3://vtex.datalake/test_consumable_tables/checkout00')
 
-        print("Complete checkout folder: {}{}".format(first_prefix_path, hexadecimal_sequence))
+    print("Complete checkout folder: {}".format(prefix_path))
 
 main()
