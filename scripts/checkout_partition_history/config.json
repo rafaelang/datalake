@@ -1,0 +1,40 @@
+[  
+    {  
+       "Classification":"yarn-site",
+       "Properties":{  
+          "yarn.nodemanager.pmem-check-enabled":"false",
+          "yarn.nodemanager.vmem-check-enabled":"false"
+       },
+       "Configurations":[  
+ 
+       ]
+    },
+    {  
+       "Classification":"spark-defaults",
+       "Properties":{  
+          "spark.executor.memory":"7g",
+          "spark.driver.memory":"7g",
+          "spark.yarn.scheduler.reporterThread.maxFailures":"5",
+          "spark.driver.cores":"5",
+          "spark.yarn.driver.memoryOverhead":"1024",
+          "spark.executor.heartbeatInterval":"60s",
+          "spark.rdd.compress":"true",
+          "spark.network.timeout":"800s",
+          "spark.executor.cores":"5",
+          "spark.memory.storageFraction":"0.30",
+          "spark.shuffle.spill.compress":"true",
+          "spark.shuffle.compress":"true",
+          "spark.storage.level":"MEMORY_AND_DISK_SER",
+          "spark.default.parallelism":"470",
+          "spark.memory.fraction":"0.80",
+          "spark.executor.extraJavaOptions":"-XX:+UseG1GC -XX:+UnlockDiagnosticVMOptions -XX:+G1SummarizeConcMark -XX:InitiatingHeapOccupancyPercent=35 -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:OnOutOfMemoryError='kill -9 %p'",
+          "spark.executor.instances":"47",
+          "spark.yarn.executor.memoryOverhead":"1024",
+          "spark.dynamicAllocation.enabled":"false",
+          "spark.driver.extraJavaOptions":"-XX:+UseG1GC -XX:+UnlockDiagnosticVMOptions -XX:+G1SummarizeConcMark -XX:InitiatingHeapOccupancyPercent=35 -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:OnOutOfMemoryError='kill -9 %p'"
+       },
+       "Configurations":[  
+ 
+       ]
+    }
+]

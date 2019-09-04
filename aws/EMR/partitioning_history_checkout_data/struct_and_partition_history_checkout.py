@@ -221,7 +221,7 @@ def main():
         .write\
         .partitionBy('YEAR','MONTH','DAY')\
         .mode('append')\
-        .parquet('s3://vtex.datalake/test_consumable_tables/checkout00')
+        .parquet('s3://vtex.datalake/consumable_tables/checkout/')
 
     print("Complete checkout folder: {}".format(prefix_path))
 
