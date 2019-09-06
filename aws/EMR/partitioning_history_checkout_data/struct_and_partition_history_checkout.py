@@ -208,13 +208,16 @@ def _read_args():
 
 def main():
     directory_path, destination_path = _read_args()
+
+    dt_src_type = 'fulfillment' if 'fulfillment' in directory_path.lower() else 'checkout'
     
     ### Getting Schema's Interface from Checkout Structured Json
-    structured_jsons_path = 's3://vtex.datalake/structured_json/checkout/' + directory_path + '/*/id/*'
+    structured_jsons_path = 's3://vtex.datalake/structured_json/' \
+        + dt_src_type + '/' + directory_path + '/*/id/*'
     structured_df = spark.read.json(structured_jsons_path)
 
     ### Reading data from Checkout History
-    history_data_path = 's3://vtex-analytics-import/vtex-checkout-versioned/' + directory_path + '*/id/*'
+    history_data_path = 's3://vtex-analytics-import/vtex-checkout-versioned/' + directory_path + '/*/id/*'
     df = spark.read.json(history_data_path)
 
     df = struct_data_frame(df, structured_df)
