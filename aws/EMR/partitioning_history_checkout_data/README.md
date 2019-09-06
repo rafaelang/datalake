@@ -16,7 +16,7 @@ To execute the function `struct_and_partition_history_checkout`, must create a c
 This `struct_and_partition_history_checkout` needs this arg to run:
 
 - --directory_path 
-    - The `--directory_path` is the path to be read.
+    - The `--directory_path` is the hexadecimal path to be read, ex: 00_CheckoutOrder.
 
 - --destination_path
-    - The `--destination_path` is the path where data to be written.
+    - The `--destination_path` is the path where data to be written, ex: consumable_tables/fulfillment.

@@ -47,7 +47,7 @@ def generate_steps(folder_prefix, path_to_be_read, destination_path):
                 'Args': ['spark-submit', 
                     '--deploy-mode', 'cluster',
                     HOME_HADOOP + SCRIPT_NAME,
-                    '--prefix-path', str(folder_prefix + hexa_prefix + path_to_be_read),
+                    '--directory-path', str(folder_prefix + hexa_prefix + path_to_be_read),
                     '--destination-path', destination_path
                 ]
             }
@@ -125,7 +125,8 @@ def _read_args():
     parser.add_argument(
         '--path-to-be-read', 
         help='Path to be read the data. For example: _CheckoutOrder',
-        required=True
+        required=True,
+        choices=('_FulfillmentOrder', '_CheckoutOrder')
     )   
     parser.add_argument(
         '--destination-path',
