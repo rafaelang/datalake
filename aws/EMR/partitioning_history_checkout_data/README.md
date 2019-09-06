@@ -11,9 +11,12 @@ On the order hand, the function `gen_config_cluster_spark` is used to get the Sp
 To execute the function `struct_and_partition_history_checkout`, must create a cluster in aws EMR with Spark installed and configurates the Spark with json gotten in `gen_config_cluster_spark`.
 
 
-### Env vars
+### Args
 
-This `struct_and_partition_history_checkout` needs this arg to run: 
+This `struct_and_partition_history_checkout` needs this arg to run:
 
-    - FIRST_PREFIX_PATH
-        - The first prefix of path indicates how folder will be readed. For example, when pass the var with value 0, the function'll converter the data from **00CheckoutOrder** to **0FCheckoutOrder**.
+- --directory_path 
+    - The `--directory_path` is the path to be read.
+
+- --destination_path
+    - The `--destination_path` is the path where data to be written.

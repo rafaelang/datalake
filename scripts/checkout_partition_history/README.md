@@ -16,8 +16,8 @@ In this file, set the following vars:
     - ex: LOG_DEST_S3_URI=s3://bucket/path/to/logs/
 
 ### Args
-You can pass some args to execute sript
+You can pass some args to execute script
 
 - --config-path   
     - required: **NOT** 
-    - in AWS EMR, you can set some custom configuration to initiate your cluster. This configurations can be passe in a json file. So, you can pass the path to a json file with some configurations to initiate your cluster.
+    - in AWS EMR, you can set some custom configuration to initiate your cluster. This configurations can be passed in a json file. So, you can pass the path to a json file with some configurations to initiate your cluster.

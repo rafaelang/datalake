@@ -193,22 +193,27 @@ def struct_data_frame(df, structured_df):
 def _read_args():
     parser=argparse.ArgumentParser()
     parser.add_argument(
-        '--prefix-path', 
-        help="Based on checkout bucket architecture, first prefix for folder to process", \
-        default='00'
+        '--directory-path', 
+        help='Path to be read the data. For example: 00_CheckoutOrder',
+        required=True
+    )
+    parser.add_argument(
+        '--destination-path', 
+        help='Where the data to be written. For example: consumable_tables/checkout',
+        required=True
     )
     args=parser.parse_args()
-    return args.prefix_path
+    
+    return args.directory_path, args.destination_path
 
 def main():
-    prefix_path = _read_args()
-
+    directory_path, destination_path = _read_args()
+    
     ### Getting Schema's Interface from Checkout Structured Json
-    structured_jsons_path = 's3://vtex.datalake/structured_json/checkout/00_CheckoutOrder/*/id/*'
+    structured_jsons_path = 's3://vtex.datalake/structured_json/checkout/' + directory_path + '/*/id/*'
     structured_df = spark.read.json(structured_jsons_path)
 
     ### Reading data from Checkout History
-    directory_path = prefix_path + '_CheckoutOrder/'
     history_data_path = 's3://vtex-analytics-import/vtex-checkout-versioned/' + directory_path + '*/id/*'
     df = spark.read.json(history_data_path)
 
@@ -221,8 +226,6 @@ def main():
         .write\
         .partitionBy('YEAR','MONTH','DAY')\
         .mode('append')\
-        .parquet('s3://vtex.datalake/consumable_tables/checkout/')
-
-    print("Complete checkout folder: {}".format(prefix_path))
+        .parquet('s3://vtex.datalake/' + destination_path + '/')
 
 main()
