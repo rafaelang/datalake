@@ -105,10 +105,9 @@ def load_objects_json(df, structured_df):
     for field in structured_df.schema.fields:
         field_type = field.dataType
         field_name = field.name
-        
-        udf_get_transform_data = UserDefinedFunction(load_json, field_type)
-        df = df.withColumn(field_name, udf_get_transform_data(field_name))
-
+        if has_column(df, field_name):
+            udf_get_transform_data = UserDefinedFunction(load_json, field_type)
+            df = df.withColumn(field_name, udf_get_transform_data(field_name))
     return df
 
 
