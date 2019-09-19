@@ -1,20 +1,20 @@
-# Migração de dados históricos do Checkout
+# Checkout Historical Data Migration
 
-## Motivação
+## Preamble
 
-Após a implementação do _pipeline_ para estruturação e particionamento dos dados do Checkout, todos os novos pedidos criados passam a ser salvos numa primeira versão pronta para consumo/consulta na conta de Analytics. Contudo, ainda era necessário resgatar todos os dados de pedidos anteriores à implementação do nosso _pipeline_. Nesse sentido, este documento descreve como se deu o processo de migração de dados históricos do Checkout e como fizemos para transformar esses dados para terem o mesmo formato que aqueles produzidos pelo _pipeline_ para o datalake.
+After implementing _pipeline_ for structuring and partitioning Checkout data, every new order you create is now saved in a first version ready for consumption / query in your Analytics account. However, we still had the need to retrieve all orders datas dated before implementing our _pipeline_. In this regard, this document describes how the Checkout historical data migration process took place and how we transformed this data to have the same format as that produced by _pipeline_ for datalake.
 
-## Migração de Dados
+## Data Migration
 
-Os dados do Checkout são salvos em um bucket s3 na região da Virgínia. O bucket, na conta de Analytics, onde salvamos os dados transformados, por sua vez, está salvo na região de Ohio. Portanto, o problema que estamos querendo resolver nesta parte é **a cópia de dados entre buckets em diferentes regiões**.
+Checkout data is originally saved on an s3 bucket in Virginia region. The bucket in the Analytics account where we save transformed data is saved in Ohio region. So the problem we are trying to solve in this part is **copying data between buckets in different regions and in different accounts**.
 
-Para a migração, utilizamos o serviço EC2 para provisionar **16 instâncias** de alta capacidade (**flavor: m5.4xlarge, com 16 VCPus, 64 Mem**). Por quê 16 instâncias? Ao todo, iríamos copiar 512 pastas do bucket de origem (216 pastas de checkoutOrder e 216 fulfillmentOrder, de acordo com a estrutura de pastas do bucket). Decidimos  que cada máquina seria responsável por fazer a cópia de 32 pastas, de modo que 16 * 32 = 512. Chegams ao número 32 após alguns experimentos, e vimos que uma máquina poderia cópiar 32 pastas em até um dia, o que era um cenário ainda bom.
+For migration, we used EC2 service to provision **16 instances** of high capacity  (**type: m5.4xlarge, with 16 VCPus, 64 Mem**). Why 16 instances? We would copy 512 folders in total from the source bucket (216 checkoutOrder folders and 216 fulfillmentOrder, according to the bucket folder structure). We decided that each machine would be responsible for copying 32 folders, so 16 * 32 = 512. We reached to  number 32 after a few experiments, and we realized that one machine could copy 32 folders within one day, which we could tolerate.
 
-### Permissões
+### Permissions
 
-Antes de tudo, para haver a cópia de dados entre diferentes contas, é preciso que permissões sejam concedidas para serviços específicos entre as contas. No nosso caso, duas permissões necessitam ser declaradas:
+First and foremost, permissions must be granted for specific services  in order to data be copied between different accounts. In our case, two permissions need to be declared:
 
-1. O bucket de origem de dados (no caso, o do Checkout) precisa anexar uma policy no bucket, acessando o menu Permissoes/Bucket Policy. Deve ser algo parecido com:
+1. The data source bucket (in this case, the Checkout one) must have a bucket policy attached to it. It can be  accomplished by accessing the Permissions / Bucket Policy menu. The bucket policy should look something like:
 
 ```json
 {
@@ -37,87 +37,114 @@ Antes de tudo, para haver a cópia de dados entre diferentes contas, é preciso 
    ]
 }
 ```
+This policy _allows any s3 action_ on the indicated bucket.
 
-Esta policy _permite_ no _bucket indicado_ a realização de _qualquer ação relativa ao s3_.
+> **WARNING**: Obviously, this policy should be used with caution. Therefore, immediately after the data copying process has been completed, it should be deleted.
 
-> **WARNING**: Obviamente, esta policy deve ser usada com precaução. Portanto, logo após ao fim do processo de cópia dos dados, ela deve ser excluída.
+2. When ordering instances, you must associate them with an IAM Role that gives **s3: fullAcess**. We will cover that point again later.
 
-2. Na hora de requisitar instâncias, é preciso associa-las a um IAM Role que dê **s3:fullAcess**. Tocaremos nesse ponto novamente mais à frente.
+3. It is also necessary to add a bucket policy at the target bucket. This policy needs to allow list, get and put actions.
 
-### Requisitando Intâncias
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Stmt1563475184681",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "arn:aws:iam::282989224251:role/EMR_EC2_DefaultRole",
+                    "arn:aws:iam::282989224251:role/EMR_DefaultRole"
+                ]
+            },
+            "Action": [
+                "s3:Get*",
+                "s3:List*",
+                "s3:Put*"
+            ],
+            "Resource": [
+                "arn:aws:s3:::target-bucket",
+                "arn:aws:s3:::target-bucket/*"
+            ]
+        }
+    ]
+}
+```
 
-Acesse o EC2 na AWS e clique em _Launch Instance_. 
+### Ordering instances
 
-1. Selecione o seguinte AMI: `Amazon Linux 2 AMI (HVM), SSD Volume Type`. _Next_.
-2. Selecione o seguinte tipo de instância: `m5.4xlarge`. _Next_.
-3. Indique:
-    - Número de instâncias: 16
-    - Em IAM Role, indique ou crie um que dê s3:FullAcess (como falamos anteriormente).
-4. Pule.
-5. Adicione as tags apropriadas.
-6. Selecione ou crie um novo grupo de segurança. É importante que no grupo de segurança usado haja uma regra que conceda acesso SSH para seu ip.
-    - Para editar um grup já existente, clique no grupo de segurança
-      - Na aba Inbound, clique em Edit para adicionar uma nova regra (SSH, TCP, 22, My Ip) e Salve.  
-      - ![Img](imgs/sec_group.png)
-   - Se desejar criar um novo grupo de segurança, adicione regras que lhe dê acesso ssh como comentado acima.
-7. Revise as informações e clique em `Launch` (selecione ou crie um nova chave de segurança).
+First, you need to ensure that you are ordering an instance that is in the same region as the source bucket (for VTEX, this region is usually virgin / us-east-1). Using the UI, you can change the region in the middle menu in the upper right corner of the screen.   
+Access EC2 on AWS and click _Launch Instance_.
 
-### Copiando arquivos
+1. Select the following AMI: `Amazon Linux 2 AMI (HVM), SSD Volume Type`. _Next_.
+2. Select the following instance type: `m5.4xlarge`. _Next_.
+3. Indicate:
+     - Number of instances: 16
+     - In IAM Role, indicate or create one that gives s3: FullAcess (as we mentioned earlier).
+4. Jump.
+5. Add the appropriate tags.
+6. Select or create a new security group. It is important that in the security group used there is a rule that grants SSH access to your ip.
+     - To edit an existing group, click on the security group.
+       - In the Inbound tab, click Edit to add a new rule (SSH, TCP, 22, My Ip) and Save.
+       - ![Img](imgs/sec_group.png)
+    - If you want to create a new security group, add rules that give you ssh access as commented above.
+7. Review the information and click `Launch` (select or create a new security key).
 
-Para copiar os dados do bucket de origem, é preciso executar um comando do `aws cli` chamado `sync`. A instância criada no passo anterior já vem com o aws cli instalado (por causa do AMI selecionado no passo 1). Execute o comando dentro da instância.
+### Copying files
 
-#### Conectando-se à instância
+To copy the data from the source bucket, you must execute a `aws cli` command called` sync`. The instance created in the previous step already comes with aws cli installed (because of the AMI selected in step 1). Run the command within the instance.
 
-Volte para a home do EC2, clique em `Instâncias`, selecione a instância criada, clique em `Connect`, leia as instruções e reproduza-as.
+#### Connecting to the instance
+
+Volte para a página inicial do EC2, clique em "Instâncias", selecione a instância que você criou, clique em "Conectar", leia as instruções e as reproduza.
 
 ![Connect to instance](imgs/connect.png)
 
-OBS: você precisa ter a chave indicada no passo 7 para acessar a máquina.
+NOTE: You must have the key indicated in step 7 to access the machine.
 
-Abra o terminal, acesse a instância. Instale o comando htop. 
+Open the terminal, access the instance. Install the htop command.
 
 ![SSH](imgs/ssh.png)
 
-#### Sync de dados
+#### Syncing data
 
-Para cada instância, rode os 32 comandos (cada comando representando o sync de uma pasta) a ela atribuídos. 
+For each instance, run the 32 commands (each command representing the sync of a folder) assigned to it.
 
-Ex de comando sync:   
-```
-aws s3 sync --quiet <s3:source_path> <s3:target_path> &
-```
+Sync command ex:
+`` `
+aws s3 sync --quiet <s3: source_path> <s3: target_path> &
+`` `
 
-Acompanhe no EC2/instance/monitoring ou com o htop o processo de transferência de dados.
+Follow the data transfer process on EC2/instance/monitoring or using htop.
+
+This document is based on [docs](https://docs.google.com/document/d/1LFyubm8vLXcrdPxL09WxzKsvQ-HMmirGIqZBZazuCf0/edit#) created when specific checkout data is migrated.
 
 
-Esse documento se baseis no [docs](https://docs.google.com/document/d/1LFyubm8vLXcrdPxL09WxzKsvQ-HMmirGIqZBZazuCf0/edit#) criado quando da migração específica dos dados do checkout.
+## Data Transformation
 
+Once copied to the Analytics account, Checkout data is raw. They need to be transformed (structured) and partitioned. Since this is a very large dataset (approx 4 terabytes), we decided to use a [script](https://github.com/vtex/datalake/tree/master/aws/EMR/partitioning_history_checkout_data) in pyspark.
+To run spark jobs, we decided to do it in the context of a cluster created with aws EMR service. But with which configuration to create this cluster, so as to best utilize machine resources and finish processing successfully?
+Throughout the experiments we have had some memory overflow issues or resource misuse or excessive run time issues required to complete jobs. After some testing, we come to the following configuration:
 
-## Transformação de Dados
+We required 32 clusters, each with the following configuration:
+   - 1 machine r5.2xlarge type Master 
+   - 2 machines c5.4xlarge type Core
 
-Depois de copiados para a conta de Analytics, os dados do Checkout encontram-se crús. Eles precisam ser transformados (estruturados) e particionados. Como se trata de um conjunto de dados muito grande (aprox 4 terabytes), decidimos usar um [script](https://github.com/vtex/datalake/tree/master/aws/EMR/partitioning_history_checkout_data) em pyspark.   
-Para executar os spark jobs, decidimos fazê-lo num contexto de um cluster criado com o serviço EMR da aws. Mas com qual configuração criar esse cluster, de modo a melhor utilizar os recursos das máquinas e finalizar os processamentos com sucesso?  
-Ao longo dos experimentos realizados, tivemos alguns problemas de estouro de memória ou de mal uso de recursos ou de exagerado tempo de execução necessário para concluir os jobs. Após alguns testes, chegamos à seguinte configuração:
+> **WARNING**: Importantly, when using machines with large resources, spark does not always run jobs using this avaible resources. You must explicitly state the amount of memory spark can consume, the amount of parallelization (CPU's), etc. Therefore, we use [this script](https://github.com/vtex/datalake/blob/master/aws/EMR/partitioning_history_checkout_data/gen_config_cluster_spark.py) to configure clusters to best use instance resources.
 
-Foram utilizados 32 clusters, cada qual com a seguinte configuração:
-   - 1 máquina Master do tipo r5.2xlarge
-   - 2 máquinas Core do tipo c5.4xlarge
+Each cluster is responsible for transforming 16 folders ("divide and conquer"). For example:
+- cluster A gets the folders 00_CheckourtOrder, 01_CheckoutOrder, ..., 0E_CheckoutOrder, 0F_CheckoutOrder
+- cluster B is responsible for 40_FulfillmentOrder, 41_FulfillmentOrder, ..., 4E_FulfillmentOrder, 4F_FulfillmentOrder.
 
-> **WARNING**: Importante ressaltar que nem sempre, quando se usam máquinas com grandes recursos, o spark executa os jobs utilizando ao máximo esses recursos. É precio declarar explicitamente a quantidade de memória que o spark pode consumir, a quantidade de paralelização (CPU's), etc. Portanto, utilizamos [este script](https://github.com/vtex/datalake/blob/master/aws/EMR/partitioning_history_checkout_data/gen_config_cluster_spark.py) para configurar os clusters, de modo a melhor utilizar os recursos das instâncias.
+Each folder must correspond to a spark job. Therefore, once a cluster is created, each folder must have an associated _step_. This _step_ means exactly submitting the partitioning script to a folder (eg 41_FulfillmentOrder). This is possible because [script](https://github.com/vtex/datalake/tree/master/aws/EMR/partitioning_history_checkout_data) takes a folder as an argument ([read](https://github.com/vtex/datalake/tree/master/aws/EMR/partitioning_history_checkout_data) more about how the script works). We use _[another script](https://github.com/vtex/datalake/tree/master/scripts/checkout_partition_history)_ to create all the clusters needed to transform and partition Checkout data, indicating in each one already a step specific to a subfolder, passed as an argument.
 
-Cada cluster é resposável por transformar 16 pastas (dividir para conquistar). Por exemplo:   
-- cluster A fica com as pastas 00_CheckourtOrder, 01_CheckoutOrder, ..., 0E_CheckoutOrder, 0F_CheckoutOrder
-- cluster B é resposável por 40_FulfillmentOrder, 41_FulfillmentOrder, ..., 4E_FulfillmentOrder, 4F_FulfillmentOrder.   
+### Faced problems 
 
-Cada pasta deve corresponder a um spark job. Portanto, depois de criado um cluster, cada pasta deve ter um _step_ associado. Esse _step_ significa exatamente submeter o script de particionamento a uma pasta (ex: 41_FulfillmentOrder). Isso é possível porque o [script](https://github.com/vtex/datalake/tree/master/aws/EMR/partitioning_history_checkout_data) recebe como argumento uma pasta ([leia](https://github.com/vtex/datalake/tree/master/aws/EMR/partitioning_history_checkout_data) mais sobre como o script funciona). Utilizamos _[outro script](https://github.com/vtex/datalake/tree/master/scripts/checkout_partition_history)_ para criar todos os clusters necessários para transformar e particionar os dados do Checkout, indicando em cada um deles já um step específico para uma subpasta, passada como argumento.
+Some problems arose during the cluster transformation and configuration processes. Here we will report what these problems were and how we solved them.
 
-### Problemas enfrentados
-
-Alguns problemas iam surgindo durante os processos de transformação e configuração dos clusters. Aqui relataremos quais problemas foram esses e como resolvemos. 
-
-O processo de estruturação dos dados do checkoutOrder ocorreu sem problemas próprios dos dados. O mesmo não ocorreu com os dados do fulfillmentOrder.   
-   - Algumas steps não foram executados porque as pastas (cada step está relacionado a uma pasta) não existiam em nossos buckets no s3. Com isso, descobrimos que o processo de migração de dados (descrito acima) falhou para três pastas do fulfillmentOrder.   
-   - Algumas pastas (50_FulfillmentOrder, F0_FulfillmentOrder, D0_FulfillmentOrder, C0_FulfillmentOrder) falharam após dois minutos de execução do spark job. Acredita-se que seja um problema de carga relacionado a infraestrutura da AWS, pois disparamos todos os 16 clusters na mesma hora, e os primeiros steps (*0_FulfillmentOrder) de alguns clusters falharam sem mensagem de erro específica. Além disso, ao fim do processo, apenas executamos esses 4 steps novamente (sem qualquer alteração) e eles executaram sem erro algum.
-   - Houve falhas nas pastas [22, 0D, 1D, 83, FE, F9]_FulfillmentOrder, relacionadas a um problema ocorrido dia 31/out/2018 às 14 h que gerou arquivos com nomes com caracteres especiais. O Spark quebrou quando tentou ler esses arquivos, pois foi acusado que os caminhos para os arquivos não existiam. Felizmente, as mensagens de erro indicavam qual _path_ havia quebrado a execução. Decidimos renomear os arquivos especificos, retirando os caracteres especiais, e reexecutamos os jobs.
-   - A estruturação da pasta 86_FulfillmentOrder falhou porque havia subpastas dentro dos caminhos abaixo de */id/. Essas subpastas são anomalias dentro da estrutura de pastas do bucket. O script tenta ler qualquer json que esteja logo abaixo de /id/. E então quando o spark lista os caminhos dos arquivos que ele lerá, os arquivos dentro dessas subpastas são mal formados (ele espera um json e encontra uma pasta),gerando espaços em branco que, na posterior tentativa de ler, levam a caminhos inexistentes.
-
+The process of structuring the checkoutOrder data went smoothly with the data itself. The same did not happen with the fulfillmentOrder data.
+   - Some steps were not performed because folders related to the step did not exist in our bucket on s3. As a result, we found that the data migration process (described above) failed for three fulfillmentOrder folders (E9__FulfillmentOrder, ED__FulfillmentOrder, FA__FulfillmentOrder).
+   - Some folders (50_FulfillmentOrder, F0_FulfillmentOrder, D0_FulfillmentOrder, C0_FulfillmentOrder) failed after two minutes of spark job execution. This is thought to be an AWS infrastructure-related load issue as we fired all 16 clusters at the same time, and the first few steps (* 0_FulfillmentOrder) of some clusters failed without a specific error message. Also, at the end of the whole rest of the process, we just ran these 4 steps again (without any changes) and they ran without any errors.
+   - There were failures in folders [22, 0D, 1D, 83, FE, F9] _FulfillmentOrder, related to a problem that occurred on October 31, 2018 at 14h that generated files with names with special characters. Spark crashed when attempting to read these files (it was reported that the paths to the files did not exist). Fortunately, the error messages indicated which _path_ had broken execution. We decided to rename the specific files, removing the special characters, and rerun the jobs.
+   - The 86_FulfillmentOrder folder structure failed because there were subfolders within the paths below */id/. These subfolders are anomalies within the bucket folder structure. The script tries to read any json just below /id . And then when spark lists the file paths before  read them, the pathes for files within those subfolders are malformed (it expects a json and finds a folder), generating blanks that, in a later attempt to read, lead to nonexistent paths.
