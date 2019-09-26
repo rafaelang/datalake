@@ -1,4 +1,4 @@
-# Checkout Historical Data Migration
+# OMS Historical Data Migration
 
 - [Preamble](#Preamble)
 - [Data Migration](#Data-Migration)
@@ -12,13 +12,13 @@
 
 ## Preamble
 
-After implementing _pipeline_ for structuring and partitioning Checkout data, every new order you create is now saved in a first version ready for consumption / query in your Analytics account. However, we still had the need to retrieve all orders datas dated before implementing our _pipeline_. In this regard, this document describes how the Checkout historical data migration process took place and how we transformed this data to have the same format as that produced by _pipeline_ for datalake.
+Because OMS bucket replication was performed long after the (source) bucket began storing data, you must redeem all files saved in the source bucket that were prior to replication. In this regard, this document describes how the process of migrating of OMS historical data took place.
 
 ## Data Migration
 
-Checkout data is originally saved on an s3 bucket in Virginia region. The bucket in the Analytics account where we save transformed data is saved in Ohio region. So the problem we are trying to solve in this part is **copying data between buckets in different regions**.
+OMS data is saved on s3 bucket in the Virginia region. The Analytics bucket where we save migration data is in the Ohio region. So the problem we are trying to solve is **copying data between buckets in different regions between two different accounts**.
 
-For migration, we used EC2 service to provision **16 instances** of high capacity  (**type: m5.4xlarge, with 16 VCPus, 64 Mem**). Why 16 instances? We would copy 512 folders in total from the source bucket (216 checkoutOrder folders and 216 fulfillmentOrder, according to the bucket folder structure). We decided that each machine would be responsible for copying 32 folders, so 16 * 32 = 512. We reached to  number 32 after a few experiments, and we realized that one machine could copy 32 folders within one day, which we could tolerate.
+For migration, we used EC2 service to provision **X instances** of high capacity  (**type: m5.4xlarge, with 16 VCPus, 64 Mem**). Why 16 instances? # TODO
 
 ### Permissions
 
@@ -47,13 +47,45 @@ First and foremost, permissions must be granted for specific services in order t
    ]
 }
 ```
-This policy _allows any s3 action_ on the indicated bucket.
 
-> ** WARNING **: Obviously, this policy should be used with caution. Therefore, immediately after the data copying process has been completed, it should be deleted.
+This policy _allows any list, get and put s3 action_ on the indicated bucket.
 
-2. When Launching instances, you must associate them with an IAM Role that gives ** s3: fullAcess **. We will cover that point again later.
+> **WARNING**: Obviously, this policy should be used with caution. Therefore, immediately after the data copying process has been completed, it should be deleted.
+
+2. When launching instances, you must associate them with an IAM Role that gives **s3: fullAcess**. We will cover that point again later.
+
+3. It is also necessary to add a bucket policy at the target bucket. This policy needs to allow list, get and put actions.
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Stmt1563475184681",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "arn:aws:iam::282989224251:role/EMR_EC2_DefaultRole",
+                    "arn:aws:iam::282989224251:role/EMR_DefaultRole"
+                ]
+            },
+            "Action": [
+                "s3:Get*",
+                "s3:List*",
+                "s3:Put*"
+            ],
+            "Resource": [
+                "arn:aws:s3:::vtex-analytics-import",
+                "arn:aws:s3:::vtex-analytics-import/*"
+            ]
+        }
+    ]
+}
+```
 
 ### Launching instances
+
+First, you need to ensure that you are ordering an instance that is in the same region as the source bucket (for VTEX, this region is usually virgin / us-east-1). Using the UI, you can change the region in the middle menu in the upper right corner of the screen.
 
 Access EC2 on AWS and click _Launch Instance_.
 

@@ -1,14 +1,14 @@
-# Migração de dados históricos do Checkout
+# Migração de dados históricos do OMS
 
 ## Motivação
 
-Após a implementação do _pipeline_ para estruturação e particionamento dos dados do Checkout, todos os novos pedidos criados passam a ser salvos numa primeira versão pronta para consumo/consulta na conta de Analytics. Contudo, ainda era necessário resgatar todos os dados de pedidos anteriores à implementação do nosso _pipeline_. Nesse sentido, este documento descreve como se deu o processo de migração de dados históricos do Checkout e como fizemos para transformar esses dados para terem o mesmo formato que aqueles produzidos pelo _pipeline_ para o datalake.
+Dado que a replicação do bucket do OMS foi realizada muito após o bucket (origem) começar a armazenar dados, é necessário resgatar todos os arquivos, salvos no bucket de origem, que fossem anteriores à replicação. Nesse sentido, este documento descreve como se deu o processo de migração de dados históricos do OMS.
 
 ## Migração de Dados
 
-Os dados do Checkout são salvos em um bucket s3 na região da Virgínia. O bucket, na conta de Analytics, onde salvamos os dados transformados, por sua vez, está salvo na região de Ohio. Portanto, o problema que estamos querendo resolver nesta parte é **a cópia de dados entre buckets em diferentes regiões**.
+Os dados do OMS são salvos em um bucket s3 na região da Virgínia. O bucket da conta de Analytics onde salvamos os dados de migração, por sua vez, está na região de Ohio. Portanto, o problema que estamos querendo resolver nesta parte é **a cópia de dados entre buckets em diferentes regiões entre duas contas distintas**.
 
-Para a migração, utilizamos o serviço EC2 para provisionar **16 instâncias** de alta capacidade (**flavor: m5.4xlarge, com 16 VCPus, 64 Mem**). Por quê 16 instâncias? Ao todo, iríamos copiar 512 pastas do bucket de origem (216 pastas de checkoutOrder e 216 fulfillmentOrder, de acordo com a estrutura de pastas do bucket). Decidimos  que cada máquina seria responsável por fazer a cópia de 32 pastas, de modo que 16 * 32 = 512. Chegams ao número 32 após alguns experimentos, e vimos que uma máquina poderia cópiar 32 pastas em até um dia, o que era um cenário ainda bom.
+Para a migração, utilizamos o serviço EC2 para provisionar **X instâncias** de alta capacidade (**flavor: m5.4xlarge, com 16 VCPus, 64 Mem**). Por quê X instâncias? #TODO
 
 ### Permissões
 
@@ -18,33 +18,71 @@ Antes de tudo, para haver a cópia de dados entre diferentes contas, é preciso 
 
 ```json
 {
-   "Version": "2012-10-17",
-   "Statement": [
-      {
-         "Sid": "Migrate checkout objects to datalake",
-         "Effect": "Allow",
-         "Principal": {
-            "AWS": "arn:aws:iam::<iam-id>:root"
-         },
-         "Action": [
-            "s3:*"
-         ],
-         "Resource": [
-            "arn:aws:s3:::<source-bucket>",
-            "arn:aws:s3:::<source-bucket>/*"
-         ]
-      }
-   ]
-}
+    "Version": "2012-10-17",
+    "Id": "Policy1563475187513",
+    "Statement": [
+        {
+            "Sid": "Stmt1563475184670",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "arn:aws:iam::282989224251:role/EMR_DefaultRole",
+                    "arn:aws:iam::282989224251:role/EMR_EC2_DefaultRole"
+                ]
+            },
+            "Action": [
+                "s3:Get*",
+                "s3:List*",
+                "s3:Put*"
+            ],
+            "Resource": [
+               "arn:aws:s3:::<source-bucket>",
+               "arn:aws:s3:::<source-bucket>/*"
+            ]
+        }
+    ]
+} 
 ```
 
-Esta policy _permite_ no _bucket indicado_ a realização de _qualquer ação relativa ao s3_.
+Esta policy _permite_ no _bucket indicado_ a realização de _qualquer ação de list, get e put ao s3_.
 
 > **WARNING**: Obviamente, esta policy deve ser usada com precaução. Portanto, logo após ao fim do processo de cópia dos dados, ela deve ser excluída.
 
 2. Na hora de requisitar instâncias, é preciso associa-las a um IAM Role que dê **s3:fullAcess**. Tocaremos nesse ponto novamente mais à frente.
 
+3. Também é necessário adicionar uma bucket policy no bucket de destino. Essa policy precisa dar acesso a ações de list, get e put.
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Stmt1563475184681",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "arn:aws:iam::282989224251:role/EMR_EC2_DefaultRole",
+                    "arn:aws:iam::282989224251:role/EMR_DefaultRole"
+                ]
+            },
+            "Action": [
+                "s3:Get*",
+                "s3:List*",
+                "s3:Put*"
+            ],
+            "Resource": [
+                "arn:aws:s3:::vtex-analytics-import",
+                "arn:aws:s3:::vtex-analytics-import/*"
+            ]
+        }
+    ]
+}
+```
+
+
 ### Requisitando Instâncias
+
+Primeiramente, é necessário garantir que você esteja requisitando uma instância que esteja na mesma região do bucket de origem (para a VTEX, no geral essa região é a virgígina/us-east-1). Usando a UI, você pode alterar a região no menu do meio no canto direito superior da tela.
 
 Acesse o EC2 na AWS e clique em _Launch Instance_. 
 
