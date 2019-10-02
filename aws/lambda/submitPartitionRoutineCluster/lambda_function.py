@@ -29,17 +29,21 @@ DESTINATION_S3_URI_PREFIX = os.getenv(
 )
 DATASRC_S3_PREFIX = os.getenv(
     'DATASRC_S3_PREFIX',
-    's3://vtex.datalake/stage/checkout_data/'
+    's3://vtex.datalake/stage/'
 )
 
 
 SCRIPT_NAME = SCRIPT_S3_URI.split('/')[-1]
 HOME_HADOOP = '/home/hadoop/'
 CHECKOUT = 'checkout'
+CHECKOUT_SRC = 'checkout_data/' + CHECKOUT
 FULFILLMENT = 'fulfillment'
-
+FULFILLMENT_SRC = 'checkout_data/' + FULFILLMENT
+ORDERS = 'orders'
+ORDERS_SRC = 'orders_data/'
 
 def lambda_handler(event, context):
+
     cluster_id = emr_client.run_job_flow(
         Name='PartitionRoutine || ' + time.strftime("%Y/%m/%d %H:%M:%S"),
         ReleaseLabel='emr-5.26.0',
@@ -57,16 +61,9 @@ def lambda_handler(event, context):
                     'Name': "Master nodes",
                     'Market': 'ON_DEMAND',
                     'InstanceRole': 'MASTER',
-                    'InstanceType': 'm4.2xlarge',
-                    'InstanceCount': 1,
-                },
-                {
-                    'Name': "Slave nodes",
-                    'Market': 'ON_DEMAND',
-                    'InstanceRole': 'CORE',
                     'InstanceType': 'r5.xlarge',
                     'InstanceCount': 1,
-                }  
+                } 
             ],
             'Ec2KeyName': 'dev_datalake',
             'KeepJobFlowAliveWhenNoSteps': False,
@@ -95,9 +92,9 @@ def lambda_handler(event, context):
                 'ActionOnFailure': 'CONTINUE',
                 'HadoopJarStep': {
                     'Jar': 'command-runner.jar',
-                    'Args': ['spark-submit', HOME_HADOOP + SCRIPT_NAME,
+                    'Args': ['spark-submit', '--deploy-mode', 'client', HOME_HADOOP + SCRIPT_NAME,
                         '--destination-path', DESTINATION_S3_URI_PREFIX + CHECKOUT + '/',
-                        '--datasrc-s3', DATASRC_S3_PREFIX + CHECKOUT + "order/"]
+                        '--datasrc-s3', DATASRC_S3_PREFIX + CHECKOUT_SRC + "order/"]
                 }
             },
             {
@@ -105,9 +102,19 @@ def lambda_handler(event, context):
                 'ActionOnFailure': 'CONTINUE',
                 'HadoopJarStep': {
                     'Jar': 'command-runner.jar',
-                    'Args': ['spark-submit', HOME_HADOOP + SCRIPT_NAME,
+                    'Args': ['spark-submit', '--deploy-mode', 'client', HOME_HADOOP + SCRIPT_NAME,
                         '--destination-path', DESTINATION_S3_URI_PREFIX + FULFILLMENT + '/',
-                        '--datasrc-s3', DATASRC_S3_PREFIX + FULFILLMENT + "order/"]
+                        '--datasrc-s3', DATASRC_S3_PREFIX + FULFILLMENT_SRC + "order/"]
+                }
+            },
+            {
+                'Name': 'Run pyspark script for ORDERS',
+                'ActionOnFailure': 'CONTINUE',
+                'HadoopJarStep': {
+                    'Jar': 'command-runner.jar',
+                    'Args': ['spark-submit', '--deploy-mode', 'client', HOME_HADOOP + SCRIPT_NAME,
+                        '--destination-path', DESTINATION_S3_URI_PREFIX + ORDERS + '/',
+                        '--datasrc-s3', DATASRC_S3_PREFIX + ORDERS_SRC]
                 }
             },
             {
