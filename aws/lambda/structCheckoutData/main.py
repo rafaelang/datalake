@@ -4,7 +4,8 @@ import json
 import boto3
 import urllib
 import re
-from gen_struct import transform_struct_json
+from cleanser import transform_struct_json
+
 
 
 logging.basicConfig()
@@ -54,6 +55,9 @@ def get_structured_json_prefix(source_key):
 
 
 def get_s3_obj_content(source_bucket, source_key):
+    '''
+        Loads the checkout/fulfillment order from S3 as a json object and returns it.
+    '''    
     object_content = s3.get_object(Bucket=source_bucket, Key=source_key)            
     object_content_body = json.loads(object_content['Body'].read())
     return object_content_body  
