@@ -78,7 +78,6 @@ def handler(event, context):
 
         # Only files under a '/id' directory are desired.
         if (contains_id_path(file_path_source)):
-            
             source_key = urllib.parse.unquote_plus(file_path_source)
             object_content_body = get_s3_obj_content(source_bucket, source_key)
             structured_json = transform_struct_json(object_content_body)            
