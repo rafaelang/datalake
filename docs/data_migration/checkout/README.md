@@ -94,7 +94,7 @@ Access EC2 on AWS and click _Launch Instance_.
 3. Indicate:
      - Number of instances: 16
      - In IAM Role, indicate or create one that gives s3: FullAcess (as we mentioned earlier).
-4. Jump.
+4. Go to next step.
 5. Add the appropriate tags.
 6. Select or create a new security group. It is important that in the security group used there is a rule that grants SSH access to your ip.
      - To edit an existing group, click on the security group.

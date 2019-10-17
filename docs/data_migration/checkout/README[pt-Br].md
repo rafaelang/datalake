@@ -52,7 +52,7 @@ Antes de tudo, para haver a cópia de dados entre diferentes contas, é preciso 
 
 Esta policy _permite_ no _bucket indicado_ a realização de _qualquer ação relativa ao s3_.
 
-> **WARNING**: Obviamente, esta policy deve ser usada com precaução. Portanto, logo após ao fim do processo de cópia dos dados, ela deve ser excluída.
+> **OBS**: Obviamente, esta policy deve ser usada com precaução. Portanto, logo após ao fim do processo de cópia dos dados, ela deve ser excluída.
 
 2. Na hora de requisitar instâncias, é preciso associa-las a um IAM Role que dê **s3:fullAcess**. Tocaremos nesse ponto novamente mais à frente.
 
@@ -96,10 +96,10 @@ Acesse o EC2 na AWS e clique em _Launch Instance_.
     - Número de instâncias: 16
     - Em IAM Role, indique ou crie um que dê s3:FullAcess (como falamos anteriormente).  
     - Auto-assign public IP: enabled.
-4. Pule.
+4. Avance para a próxima etapa.
 5. Adicione as tags apropriadas.
 6. Selecione ou crie um novo grupo de segurança. É importante que no grupo de segurança usado haja uma regra que conceda acesso SSH para seu ip.
-    - Para editar um grup já existente, clique no grupo de segurança
+    - Para editar um grupo já existente, clique no grupo de segurança
       - Na aba Inbound, clique em Edit para adicionar uma nova regra (SSH, TCP, 22, My Ip) e Salve.  
       - ![Img](imgs/sec_group.png)
    - Se desejar criar um novo grupo de segurança, adicione regras que lhe dê acesso ssh como comentado acima.
