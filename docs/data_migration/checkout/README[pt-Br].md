@@ -1,16 +1,28 @@
 # Migração de dados históricos do Checkout
 
-## Motivação
+## **Índice**
+
+- [1. Motivação](#1.-Motivação)
+- [2. Migração de Dados](#2.-Migração-de-Dados)
+    - [2.1 Permissões](#2.1-Permissões)
+    - [2.2 Requisitando Instâncias](#2.2-Requisitando-Instâncias)
+    - [2.3 Copiando arquivos](#2.3-Copiando-arquivos)
+        - [2.3.1 Conectando-se à instância](#2.3.1-Conectando-se-à-instância)
+        - [2.3.2 Sincronizando dados](#2.3.2-Sincronizando-dados)
+- [3 Transformação de Dados](#3-Transformação-de-Dados)
+    - [Problemas enfrentados](#Problemas-enfrentados)
+
+## 1 Motivação
 
 Após a implementação do _pipeline_ para estruturação e particionamento dos dados do Checkout, todos os novos pedidos criados passam a ser salvos numa primeira versão pronta para consumo/consulta na conta de Analytics. Contudo, ainda era necessário resgatar todos os dados de pedidos anteriores à implementação do nosso _pipeline_. Nesse sentido, este documento descreve como se deu o processo de migração de dados históricos do Checkout e como fizemos para transformar esses dados para terem o mesmo formato que aqueles produzidos pelo _pipeline_ para o datalake.
 
-## Migração de Dados
+## 2 Migração de Dados
 
 Os dados do Checkout são salvos em um bucket s3 na região da Virgínia. O bucket da conta de Analytics onde salvamos os dados transformados está por sua vez salvo na região de Ohio. Portanto, o problema que estamos querendo resolver nesta parte é **a cópia de dados entre buckets em diferentes regiões e em diferentes contas**.
 
 Para a migração, utilizamos o serviço EC2 para provisionar **16 instâncias** de alta capacidade (**flavor: m5.4xlarge, com 16 VCPus, 64 Mem**). Por quê 16 instâncias? Ao todo, iríamos copiar 512 pastas do bucket de origem (216 pastas de checkoutOrder e 216 fulfillmentOrder, de acordo com a estrutura de pastas do bucket). Decidimos  que cada máquina seria responsável por fazer a cópia de 32 pastas, de modo que 16 * 32 = 512. Chegams ao número 32 após alguns experimentos, e vimos que uma máquina poderia cópiar 32 pastas em até um dia, o que era um cenário ainda bom.
 
-### Permissões
+### 2.1 Permissões
 
 Antes de tudo, para haver a cópia de dados entre diferentes contas, é preciso que permissões sejam concedidas para serviços específicos entre as contas. No nosso caso, duas permissões necessitam ser declaradas:
 
@@ -73,7 +85,7 @@ Esta policy _permite_ no _bucket indicado_ a realização de _qualquer ação re
 }
 ```
 
-### Requisitando Instâncias
+### 2.2 Requisitando Instâncias
 
 Primeiramente, é necessário garantir que você esteja requisitando uma instância que esteja na mesma região do bucket de origem (para a VTEX, no geral essa região é a virgígina/us-east-1). Usando a UI, você pode alterar a região no menu do meio no canto direito superior da tela.   
 Acesse o EC2 na AWS e clique em _Launch Instance_. 
@@ -93,11 +105,11 @@ Acesse o EC2 na AWS e clique em _Launch Instance_.
    - Se desejar criar um novo grupo de segurança, adicione regras que lhe dê acesso ssh como comentado acima.
 7. Revise as informações e clique em `Launch` (selecione ou crie um nova chave de segurança).
 
-### Copiando arquivos
+### 2.3 Copiando arquivos
 
 Para copiar os dados do bucket de origem, é preciso executar um comando do `aws cli` chamado `sync`. A instância criada no passo anterior já vem com o aws cli instalado (por causa do AMI selecionado no passo 1). Execute o comando dentro da instância.
 
-#### Conectando-se à instância
+#### 2.3.1 Conectando-se à instância
 
 Volte para a home do EC2, clique em `Instâncias`, selecione a instância criada, clique em `Connect`, leia as instruções e reproduza-as.
 
@@ -109,7 +121,7 @@ Abra o terminal, acesse a instância. Instale o comando htop.
 
 ![SSH](imgs/ssh.png)
 
-#### Sync de dados
+#### 2.3.1 Sincronizando dados
 
 Para cada instância, rode os 32 comandos (cada comando representando o sync de uma pasta) a ela atribuídos. 
 
@@ -124,7 +136,7 @@ Acompanhe no EC2/instance/monitoring ou com o htop o processo de transferência 
 Esse documento se baseis no [docs](https://docs.google.com/document/d/1LFyubm8vLXcrdPxL09WxzKsvQ-HMmirGIqZBZazuCf0/edit#) criado quando da migração específica dos dados do checkout.
 
 
-## Transformação de Dados
+## 3 Transformação de Dados
 
 Depois de copiados para a conta de Analytics, os dados do Checkout encontram-se crús. Eles precisam ser transformados (estruturados) e particionados. Como se trata de um conjunto de dados muito grande (aprox 4 terabytes), decidimos usar um [script](https://github.com/vtex/datalake/tree/master/aws/EMR/partitioning_history_checkout_data) em pyspark.   
 Para executar os spark jobs, decidimos fazê-lo num contexto de um cluster criado com o serviço EMR da aws. Mas com qual configuração criar esse cluster, de modo a melhor utilizar os recursos das máquinas e finalizar os processamentos com sucesso?  

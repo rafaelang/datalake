@@ -1,16 +1,28 @@
-# Checkout Historical Data Migration
+#  Checkout Historical Data Migration
 
-## Preamble
+## **Index**
+
+- [1. Preamble](#1.-Preamble)
+- [2. Data Migration](#2.-Data-Migration)
+    - [2.1 Permissions](#2.1-Permissions)
+    - [2.2 Ordering instances](#2.2-Ordering-instances)
+    - [2.3 Copying files](#2.3-Copying-files)
+        - [2.3.1 Connecting to the instance](#2.3.1-Connecting-to-the-instance)
+        - [2.3.2 Syncing data](#2.3.2-Syncing-data)
+- [3 Data Transformation](#3-Data-Transformation)
+    - [Faced problems](#Faced-problems)
+
+## 1 Preamble
 
 After implementing _pipeline_ for structuring and partitioning Checkout data, every new order you create is now saved in a first version ready for consumption / query in your Analytics account. However, we still had the need to retrieve all orders datas dated before implementing our _pipeline_. In this regard, this document describes how the Checkout historical data migration process took place and how we transformed this data to have the same format as that produced by _pipeline_ for datalake.
 
-## Data Migration
+## 2 Data Migration
 
 Checkout data is originally saved on an s3 bucket in Virginia region. The bucket in the Analytics account where we save transformed data is saved in Ohio region. So the problem we are trying to solve in this part is **copying data between buckets in different regions and in different accounts**.
 
 For migration, we used EC2 service to provision **16 instances** of high capacity  (**type: m5.4xlarge, with 16 VCPus, 64 Mem**). Why 16 instances? We would copy 512 folders in total from the source bucket (216 checkoutOrder folders and 216 fulfillmentOrder, according to the bucket folder structure). We decided that each machine would be responsible for copying 32 folders, so 16 * 32 = 512. We reached to  number 32 after a few experiments, and we realized that one machine could copy 32 folders within one day, which we could tolerate.
 
-### Permissions
+### 2.1 Permissions
 
 First and foremost, permissions must be granted for specific services  in order to data be copied between different accounts. In our case, two permissions need to be declared:
 
@@ -72,7 +84,7 @@ This policy _allows any s3 action_ on the indicated bucket.
 }
 ```
 
-### Ordering instances
+### 2.2 Ordering instances
 
 First, you need to ensure that you are ordering an instance that is in the same region as the source bucket (for VTEX, this region is usually virgin / us-east-1). Using the UI, you can change the region in the middle menu in the upper right corner of the screen.   
 Access EC2 on AWS and click _Launch Instance_.
@@ -91,11 +103,11 @@ Access EC2 on AWS and click _Launch Instance_.
     - If you want to create a new security group, add rules that give you ssh access as commented above.
 7. Review the information and click `Launch` (select or create a new security key).
 
-### Copying files
+### 2.3 Copying files
 
 To copy the data from the source bucket, you must execute a `aws cli` command called` sync`. The instance created in the previous step already comes with aws cli installed (because of the AMI selected in step 1). Run the command within the instance.
 
-#### Connecting to the instance
+#### 2.3.1 Connecting to the instance
 
 Volte para a página inicial do EC2, clique em "Instâncias", selecione a instância que você criou, clique em "Conectar", leia as instruções e as reproduza.
 
@@ -107,7 +119,7 @@ Open the terminal, access the instance. Install the htop command.
 
 ![SSH](imgs/ssh.png)
 
-#### Syncing data
+#### 2.3.2 Syncing data
 
 For each instance, run the 32 commands (each command representing the sync of a folder) assigned to it.
 
@@ -121,7 +133,7 @@ Follow the data transfer process on EC2/instance/monitoring or using htop.
 This document is based on [docs](https://docs.google.com/document/d/1LFyubm8vLXcrdPxL09WxzKsvQ-HMmirGIqZBZazuCf0/edit#) created when specific checkout data is migrated.
 
 
-## Data Transformation
+## 3 Data Transformation
 
 Once copied to the Analytics account, Checkout data is raw. They need to be transformed (structured) and partitioned. Since this is a very large dataset (approx 4 terabytes), we decided to use a [script](https://github.com/vtex/datalake/tree/master/aws/EMR/partitioning_history_checkout_data) in pyspark.
 To run spark jobs, we decided to do it in the context of a cluster created with aws EMR service. But with which configuration to create this cluster, so as to best utilize machine resources and finish processing successfully?
