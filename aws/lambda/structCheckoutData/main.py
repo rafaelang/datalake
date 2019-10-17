@@ -4,7 +4,7 @@ import json
 import boto3
 import urllib
 import re
-from cleanser import transform_struct_json
+from malformed_data_processor import transform_struct_json
 
 
 
