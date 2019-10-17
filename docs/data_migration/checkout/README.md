@@ -109,7 +109,7 @@ To copy the data from the source bucket, you must execute a `aws cli` command ca
 
 #### 2.3.1 Connecting to the instance
 
-Volte para a página inicial do EC2, clique em "Instâncias", selecione a instância que você criou, clique em "Conectar", leia as instruções e as reproduza.
+Go back to the EC2 home page, click "Instances", select the instance you created, click "Connect", read the instructions and play them back.
 
 ![Connect to instance](imgs/connect.png)
 
