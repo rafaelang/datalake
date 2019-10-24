@@ -116,7 +116,6 @@ def transform_customdata(customdata):
     KEY_EXTRA_CONTENT = "cart-extra-context"
     if KEY_CUSTOMAPP in customdata:
         for i in range(len(customdata[KEY_CUSTOMAPP])):
-            logger.info('menorme {}'.format(customdata[KEY_CUSTOMAPP]))
             if KEY_FIELDS in customdata[KEY_CUSTOMAPP][i] and\
                 KEY_EXTRA_CONTENT in customdata[KEY_CUSTOMAPP][i][KEY_FIELDS]:
                     del customdata[KEY_CUSTOMAPP][i][KEY_FIELDS][KEY_EXTRA_CONTENT]

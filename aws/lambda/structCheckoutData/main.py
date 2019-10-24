@@ -67,7 +67,7 @@ def handler(event, context):
     '''
         Function that is called when lambda is triggered.
     '''
-    logger.info('Running Lambda Function {}::{}'.format(context.function_name, context.function_version))
+    logger.debug('Running Lambda Function {}::{}'.format(context.function_name, context.function_version))
     logger.debug('Processing event:\n{}'.format(json.dumps(event, indent=4, sort_keys=True)))
 
     try:
