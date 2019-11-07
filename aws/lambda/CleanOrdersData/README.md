@@ -1,7 +1,7 @@
 ### Description
 
-This function is triggered always that new data is replicated from the vtex-checkout-versioned (VTEX account) to vtex-checkout-versioned-rawdata (VTEX Analytics account).
-This Checkout Data (checkoutOrders and fulfillmentOrders) is unstructured — json files whose values are always string, even thought it should be nested jsons. So, this lambda functions transform these json, in the sense of load what is a string value to what it should be, whether a string, an array, a boolean, a nested json...
+This function is triggered always that new data is replicated from the vtex-orders-index bucket (at VTEX general account) to vtex-orders-index-rawdata (VTEX Analytics account).
+In this Orders Data some fields has bad keys (special chars, for example). So, this lambda functions copies every new json object that comes to vtex-orders-index-rawdata, remove theses fields with bad keys and save them on s3://vtex.datalake/raw_data/orders/cleansed_stage/
 
 ### Execution Role
 

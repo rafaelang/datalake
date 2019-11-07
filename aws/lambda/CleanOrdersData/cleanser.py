@@ -11,6 +11,7 @@ ATTACHMENT = "attachment"
 JSON_KEY_ITEMMETADATA = "ItemMetadata"
 JSON_KEY_RATESANDBDATA = "RatesAndBenefitsData"
 JSON_KEY_CUSTOMDATA = "CustomData"
+JSON_KEY_PAYMENT = "PaymentData"
 
 
 def remove_attachments(dic):
@@ -44,10 +45,10 @@ def clean_itemmetadata(itemmetadata):
         Returns:
             the input argument but with structure changes inner fields.         
     '''    
-    len_items_itemmetadata = len(itemmetadata["items"])
+    len_items_itemmetadata = len(itemmetadata["Items"])
     for i in range(len_items_itemmetadata):
-        if ("assemblyOptions" in itemmetadata["items"][i]):
-            del itemmetadata["items"][i]["assemblyOptions"]
+        if ("AssemblyOptions" in itemmetadata["Items"][i]):
+            del itemmetadata["Items"][i]["AssemblyOptions"]
     return itemmetadata
     
     
@@ -60,9 +61,9 @@ def clean_ratesandbenefitsdata(rtbndata):
         Returns:
             the input array but with structure changes in each element.         
     '''     
-    KEY_IDENTIFIERS = "rateAndBenefitsIdentifiers"
-    KEY_MATCH_PARAMS = "matchedParameters"
-    KEY_ADDINFO = "additionalInfo"
+    KEY_IDENTIFIERS = "RateAndBenefitsIdentifiers"
+    KEY_MATCH_PARAMS = "MatchedParameters"
+    KEY_ADDINFO = "AdditionalInfo"
     for i in range(len(rtbndata[KEY_IDENTIFIERS])):
         if KEY_MATCH_PARAMS in rtbndata[KEY_IDENTIFIERS][i]:
             del rtbndata[KEY_IDENTIFIERS][i][KEY_MATCH_PARAMS]
@@ -71,27 +72,20 @@ def clean_ratesandbenefitsdata(rtbndata):
     return rtbndata
 
 
-def clean_customdata(customdata):
-    '''
-        Remove malformed inner fields from json object (customApps.cart-extra-contex).
+def clean_paymentdata(paydata):
+    KEY_TRANSACTIONS = "Transactions"
+    KEY_CONN_RESP = "connectorResponses"
+    KEY_PAYMENTS = "Payments"
+    if KEY_TRANSACTIONS in paydata:
+        for i in range(len(paydata[KEY_TRANSACTIONS])):
+            if KEY_PAYMENTS in paydata[KEY_TRANSACTIONS][i]:
+                payments = paydata[KEY_TRANSACTIONS][i][KEY_PAYMENTS]
+                for j in range(len(payments)):
+                    if KEY_CONN_RESP in payments[j]:
+                        del paydata[KEY_TRANSACTIONS][i][KEY_PAYMENTS][j][KEY_CONN_RESP]
+    return paydata
 
-        Args:
-            customdata (dict): order item's metadata.
-        Returns:
-            the input argument but with structure changes in inner fields.
-    '''  
-    KEY_CUSTOMAPP = "customApps"
-    KEY_FIELDS = "fields"
-    KEY_EXTRA_CONTENT = "cart-extra-context"
-    if KEY_CUSTOMAPP in customdata:
-        for i in range(len(customdata[KEY_CUSTOMAPP])):
-            logger.info('menorme {}'.format(customdata[KEY_CUSTOMAPP]))
-            if KEY_FIELDS in customdata[KEY_CUSTOMAPP][i] and\
-                KEY_EXTRA_CONTENT in customdata[KEY_CUSTOMAPP][i][KEY_FIELDS]:
-                    del customdata[KEY_CUSTOMAPP][i][KEY_FIELDS][KEY_EXTRA_CONTENT]
-    return customdata
     
-
 def clean_struct_json(raw_json):
     '''
         Remove some fields (know for problems like special chars os blank space on fields keys), 
@@ -100,8 +94,9 @@ def clean_struct_json(raw_json):
     cleansed_json = dict()
     for key in raw_json.keys():
         raw_value = raw_json.get(key)
+        
         try:
-            cleansed_json[key] = json.loads(raw_value)
+            cleansed_json[key] = raw_value
                 
             if key == JSON_KEY_ITEMMETADATA:
                 cleansed_json[key] = clean_itemmetadata(cleansed_json[key])
@@ -110,7 +105,11 @@ def clean_struct_json(raw_json):
                 cleansed_json[key] = clean_ratesandbenefitsdata(cleansed_json[key])
                 
             if key == JSON_KEY_CUSTOMDATA:
-                cleansed_json[key] = clean_customdata(cleansed_json[key])
+                del cleansed_json[JSON_KEY_CUSTOMDATA]
+                
+            if key == JSON_KEY_PAYMENT:
+                cleansed_json[key] = clean_paymentdata(cleansed_json[key])
+            
                 
         except json.decoder.JSONDecodeError:  # when raw_value is a simple string
             cleansed_json[key] = raw_value
