@@ -29,13 +29,26 @@ object Order {
       StructType(
         Array(
           StructField(
-            "Address",
-            StructType(
-              Array(StructField("PostalCode", StringType, nullable = true))
+            "LogisticsInfo",
+            ArrayType(
+              StructType(
+                Array(
+                  StructField("PickupStoreInfo",
+                              StructType(
+                                Array(
+                                  StructField("IsPickupStore",
+                                              BooleanType,
+                                              nullable = true)
+                                )
+                              ))
+                )
+              )
             ),
-            nullable = true)
+            nullable = true
+          )
         )
-      ))
+      )
+    )
 
     val storepreferencesdata = StructField(
       "storepreferencesdata",
