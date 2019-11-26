@@ -1,76 +1,107 @@
-import org.apache.spark.SparkContext
-import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
-import org.apache.spark.streaming.{Seconds, StreamingContext}
-import org.apache.spark.sql.functions._
-import org.apache.spark.sql.streaming.StreamingQuery
-import Models.Order
 import Helpers.DataframeTransformations
+import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.fs.Path
+import org.apache.parquet.hadoop.ParquetInputFormat
+import org.apache.spark.SparkContext
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.types.TimestampType
+import org.apache.spark.sql._
+import org.apache.spark.streaming.dstream.InputDStream
+import org.apache.spark.streaming.{Seconds, StreamingContext, Time}
+import org.apache.spark.sql.functions._
+import java.time.format.DateTimeFormatter
+import java.time.{Instant, LocalDateTime, ZoneOffset}
 
 object Main {
+
+  private val date_formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd/HH")
 
   def main(args: Array[String]): Unit = {
 
     implicit val sparkSession: SparkSession = SparkSession.builder
-//      .master("local[*]")
+      .master("local[*]")
       .appName("BlackFridayDashboard")
       .getOrCreate()
 
-    val sc: SparkContext = sparkSession.sparkContext
-    val ssc: StreamingContext = new StreamingContext(sc, Seconds(5))
+    implicit val sc: SparkContext = sparkSession.sparkContext
+    implicit val ssc: StreamingContext = new StreamingContext(sc, Seconds(5))
 
     ssc.sparkContext.setLogLevel("ERROR")
 
     val inputDir: String =
-      "s3://vtex.datalake/raw_data/orders/parquet_stage/ingestion_year=*/ingestion_month=*/ingestion_day=*/ingestion_hour=*/"
+      "/Users/diego/repos/datalake/projects/orders-dashboard/inputDir/"
 
     val outputDir: String =
-      "s3://vtex-ml/BlackFridayDashboard/Processed/"
+      "/Users/diego/repos/datalake/projects/orders-dashboard/outputDir/"
 
-    val checkpointDir: String =
-      "s3://vtex-ml/BlackFridayDashboard/SparkCheckpoint/"
-
-    runSparkContext(inputDir: String, outputDir: String, checkpointDir: String)
+    runSparkContext(inputDir: String, outputDir: String)
   }
 
-  def runSparkContext(
-      inputDir: String,
-      outputDir: String,
-      checkpointDir: String)(implicit sparkSession: SparkSession): Unit = {
+  def runSparkContext(inputDir: String, outputDir: String)(
+      implicit sparkSession: SparkSession,
+      sc: SparkContext,
+      ssc: StreamingContext): Unit = {
 
-    import sparkSession.implicits.StringToColumn
+    ssc.sparkContext.hadoopConfiguration.set(
+      "parquet.read.support.class",
+      "org.apache.parquet.avro.AvroReadSupport")
 
-    val dfStream: DataFrame = sparkSession.readStream
-      .schema(Order.Schema.schema)
-      .option("latestFirst", "true")
-      .parquet(inputDir)
+    val stream: InputDStream[(Void, GenericRecord)] =
+      ssc.fileStream[Void, GenericRecord, ParquetInputFormat[GenericRecord]](
+        inputDir, { path: Path =>
+          path.toString.endsWith("parquet")
+        },
+        true,
+        ssc.sparkContext.hadoopConfiguration)
 
-    val explodedDF: DataFrame = dfStream
-      .withColumn("totals", explode($"totals"))
-      .withColumn("creationdate", $"creationdate".cast(TimestampType))
+    stream.foreachRDD { (rdd, time) =>
+      println(rdd.count())
 
-    val flattenedSchema: Array[Column] =
-      DataframeTransformations.flattenSchema(explodedDF.schema, None)
+    }
 
-    val renamedCols: Array[Column] = flattenedSchema.map(name =>
-      col(name.toString()).as(name.toString().replace(".", "_")))
+    val countData = stream.count
 
-    val outputDF: DataFrame = explodedDF.select(renamedCols: _*)
+    countData.print
 
-    val query: StreamingQuery = outputDF
-      .select(hour($"creationdate") as "hour",
-              dayofmonth($"creationdate") as "day",
-              month($"creationdate") as "month",
-              year($"creationdate") as "year",
-              $"*")
-      .writeStream
-      .partitionBy("year", "month", "day", "hour")
-      .outputMode("append")
-      .format("parquet")
-      .option("path", outputDir)
-      .option("checkpointLocation", checkpointDir)
-      .start()
+    stream
+      .map(_._2)
+      .transform(rdd => rdd.map(record => record.toString))
+      .foreachRDD((rdd: RDD[String], time: Time) => {
 
-    query.awaitTermination()
+        import sparkSession.implicits.StringToColumn
+
+        val dataDF: DataFrame = sparkSession.sqlContext.read.json(rdd)
+
+        if (!dataDF.isEmpty) {
+
+          // TODO: Select the columns before or force the schema
+          val explodedDF = dataDF
+            .withColumn("totals", explode($"totals"))
+            .withColumn("creationdate", $"creationdate".cast(TimestampType))
+
+          // TODO: Transformations here
+
+          val flattenedSchema: Array[Column] =
+            DataframeTransformations.flattenSchema(explodedDF.schema, None)
+
+          val renamedCols: Array[Column] = flattenedSchema.map(
+            name =>
+              col(name.toString())
+                .as(name.toString().replace(".", "_")))
+
+          val outputDF: DataFrame = explodedDF.select(renamedCols: _*)
+
+          val dateTime =
+            LocalDateTime.ofInstant(Instant.ofEpochMilli(time.milliseconds),
+                                    ZoneOffset.UTC)
+          outputDF.write
+            .mode(SaveMode.Append)
+            .parquet(outputDir +
+              dateTime.format(date_formatter))
+        }
+      })
+
+    ssc.start()
+    ssc.awaitTermination()
   }
 }
