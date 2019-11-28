@@ -19,4 +19,3 @@ scalacOptions += "-P:wartremover:traverser:org.wartremover.warts.Unsafe"
 // https://mvnrepository.com/artifact/com.sksamuel.scapegoat/scalac-scapegoat-plugin
 scapegoatVersion in ThisBuild := "1.3.8"
 
-
