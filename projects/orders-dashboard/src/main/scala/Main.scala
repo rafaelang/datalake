@@ -15,6 +15,34 @@ import org.apache.spark.streaming.{Seconds, StreamingContext, Time}
 object Main {
 
   private val date_formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd/HH/mm")
+  private val ColnameTotals = "totals"
+  private val ColnameLogisticsInfo = "LogisticsInfo"
+  private val ColnameOrigin = "origin"
+  private val ColnameStatus = "status"
+  private val ColnameOrderGroup = "ordergroup"
+  private val ColnameOrderId = "orderid"
+  private val ColnameIsPickUpStore = "LogisticsInfo_array_element_PickupStoreInfo_IsPickupStore"
+  private val ColnameTotalsId = "totals_array_element_Id"
+  private val CaolnameTotalsIdFlatten = "totals_id"
+  private val ColnameTotalsValue = "totals_array_element_value"
+  private val ColnameTotalsValueFlatten = "totals_value"
+  private val ColnameValue = "value"
+  private val ColnameRevenue = "revenue"
+  private val ColnameIsFreeShipping = "is_free_shipping"
+  private val ColnameOrdersFreeShipping = "orders_free_shipping"
+  private val ColnameOrdersNumber = "orders_number"
+  private val ColnameOrdersPickUp = "orders_pickup"
+  private val ColnameCountryCode = "storepreferencesdata_CountryCode"
+  private val ColnameCountryCodeFlatten = "country_code"
+  private val ColnameCurrencyCode = "storepreferencesdata_CurrencyCode"
+  private val ColnameCurrencyCodeFlatten = "currency_code"
+
+
+  private val OrderAccepted = "order-accepted"
+  private val IsPickUpStore = "is_pick_up_store"
+  private val Shipping = "Shipping"
+
+
 
   def main(args: Array[String]): Unit = {
 
@@ -65,10 +93,10 @@ object Main {
 
         if (!dataDF.isEmpty) {
           val dfExplodedTotals: DataFrame = dataDF
-            .withColumn("totals", explode($"totals"))
+            .withColumn(ColnameTotals, explode($"totals"))
 
           val dfExplodedLogisticsInfo: DataFrame = dfExplodedTotals
-            .withColumn("LogisticsInfo", explode($"shippingdata.LogisticsInfo"))
+            .withColumn(ColnameLogisticsInfo, explode($"shippingdata.LogisticsInfo"))
 
           val flattenedSchema: Array[Column] = DataframeTransformations
             .flattenSchema(schema = dfExplodedLogisticsInfo.schema, prefix = None)
@@ -84,71 +112,92 @@ object Main {
 
           val recentlyCreated: DataFrame = flattenedDF
             .filter(
-              ((col("origin") === 1) &&
-                (col("status") === "order-accepted")) ||
-              ((col("origin") === 0) &&
-                (col("status") === "order-created"))
+              ((col(ColnameOrigin) === 1) &&
+                (col(ColnameStatus) === OrderAccepted)) ||
+              ((col(ColnameOrigin) === 0) &&
+                (col(ColnameStatus) === OrderAccepted))
             )
 
           val orderGroupDF: DataFrame = recentlyCreated
-            .withColumn("ordergroup",
-              when(col("origin") === 1,
-                col("orderid")
-              ).otherwise(col("ordergroup")))
+            .withColumn(ColnameOrderGroup,
+              when(col(ColnameOrigin) === 1, col(ColnameOrderId))
+                .otherwise(col(ColnameOrderGroup)))
 
           val selectedDF: DataFrame = orderGroupDF
             .select(
-              $"origin", $"orderid", $"ordergroup",
+              $"origin",
+              $"value",
+              $"orderid",
+              $"ordergroup",
+              $"hostname",
+              $"totals_array_element_Id",
+              $"totals_array_element_value",
               $"LogisticsInfo_array_element_PickupStoreInfo_IsPickupStore",
               $"storepreferencesdata_CountryCode",
-              $"storepreferencesdata_CurrencyCode",
-              $"hostname", $"value", $"totals_array_element_Id",
-              $"totals_array_element_value"
+              $"storepreferencesdata_CurrencyCode"
             ).distinct()
 
-          val aggByPickupStoreDF: DataFrame = selectedDF
+          val renamedDF: DataFrame = selectedDF
+            .withColumnRenamed(ColnameTotalsId, CaolnameTotalsIdFlatten)
+            .withColumnRenamed(ColnameTotalsValue, ColnameTotalsValueFlatten)
+            .withColumnRenamed(ColnameCountryCode, ColnameCountryCodeFlatten)
+            .withColumnRenamed(ColnameCurrencyCode, ColnameCurrencyCodeFlatten)
+
+          val aggByPickupStoreDF: DataFrame = renamedDF
             .groupBy(
-              $"origin", $"orderid", $"ordergroup",
-              $"storepreferencesdata_CountryCode",
-              $"storepreferencesdata_CurrencyCode",
-              $"hostname", $"value", $"totals_array_element_value",
-              $"totals_array_element_Id")
-            .agg(max("LogisticsInfo_array_element_PickupStoreInfo_IsPickupStore").alias("isPickupStore"))
+              $"origin",
+              $"value",
+              $"orderid",
+              $"hostname",
+              $"ordergroup",
+              $"totals_id",
+              $"totals_value",
+              $"country_code",
+              $"currency_code")
+            .agg(max(ColnameIsPickUpStore).alias(IsPickUpStore))
 
           val filteredByShippingDF: DataFrame = aggByPickupStoreDF
-            .filter(col("totals_array_element_Id") === "Shipping")
+            .filter(col(CaolnameTotalsIdFlatten) === Shipping)
             .select(
-              $"origin", $"orderid", $"ordergroup",
-              $"storepreferencesdata_CountryCode",
-              $"isPickupStore", $"storepreferencesdata_CurrencyCode",
-              $"hostname", $"value", $"totals_array_element_value")
+              $"origin",
+              $"value",
+              $"orderid",
+              $"hostname",
+              $"ordergroup",
+              $"is_pick_up_store",
+              $"totals_value",
+              $"country_code",
+              $"currency_code")
 
           val totalOrderValueDF: DataFrame = filteredByShippingDF
             .groupBy(
-              $"hostname", $"ordergroup", $"origin",
-              $"storepreferencesdata_CountryCode",
-              $"storepreferencesdata_CurrencyCode"
+              $"hostname",
+              $"origin",
+              $"ordergroup",
+              $"country_code",
+              $"currency_code"
             ).agg(
-            sum("value").alias("value"),
-            sum("totals_array_element_value").alias("totals_array_element_value"),
-            max("isPickupStore").alias("isPickupStore")
+            sum(ColnameValue).alias(ColnameValue),
+            sum(ColnameTotalsValueFlatten).alias(ColnameTotalsValueFlatten),
+            max(IsPickUpStore).alias(IsPickUpStore)
           )
 
           val addFreeShippingColDF: DataFrame = totalOrderValueDF
-            .withColumn("is_free_shipping",
-              when(col("totals_array_element_value") === 0, true)
+            .withColumn(ColnameIsFreeShipping,
+              when(col(ColnameTotalsValueFlatten) === 0, true)
                 .otherwise(false))
 
           val ordersCreated: DataFrame = addFreeShippingColDF
             .groupBy(
-              $"hostname", $"origin",
-              $"storepreferencesdata_CountryCode",
-              $"storepreferencesdata_CurrencyCode"
+              $"hostname",
+              $"origin",
+              $"country_code",
+              $"currency_code"
             ).agg(
-            count("ordergroup").alias("orders_number"),
-            sum(col("is_free_shipping").cast("long")).alias("orders_free_shipping"),
-            sum(col("isPickupStore").cast("long")).alias("orders_pickup"),
-            sum("value").alias("revenue")
+            count(ColnameOrderGroup).alias(ColnameOrdersNumber),
+            sum(col(ColnameIsFreeShipping).cast("long")).alias(ColnameOrdersFreeShipping),
+            sum(col(IsPickUpStore).cast("long")).alias(ColnameOrdersPickUp),
+            sum(ColnameValue).alias(ColnameRevenue)
           )
 
           val dateTime = LocalDateTime.ofInstant(
