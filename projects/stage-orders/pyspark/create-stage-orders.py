@@ -1,12 +1,15 @@
 from pyspark.context import SparkContext
 from pyspark.sql.session import SparkSession
 
-from pyspark.sql.functions import UserDefinedFunction, to_json, struct
+from pyspark.sql.functions import UserDefinedFunction, to_json, struct, lit
 from pyspark.sql.types import *
 
 import argparse
 
 import json
+
+from datetime import datetime, timedelta
+from pytz import timezone
 
 ## Building SparkSession
 
@@ -107,29 +110,29 @@ def create_stage_data(df):
 
 ## Functions to partition data
 
-def getYear(creationDate):
-    return creationDate.split('T')[0].split('-')[0]
+def get_last_hour_date(timezone_str='UTC'):
+    class MTime(object):
+        def __init__(self, y_str, m_str, d_str, h_str, min_str, s_srt):
+            self.year = y_str
+            self.month = m_str
+            self.day = d_str
+            self.hour = h_str
+            self.min = min_str
+            self.second = s_srt
+    
+    now = datetime.now(timezone(timezone_str))
+    last_hour_date = now - timedelta(hours=1)
+    year, month, day = str(last_hour_date).split(' ')[0].split('-')
+    hour, minn, second, _ = str(last_hour_date).split(' ')[1].split(':')
+    last_hour_date = MTime(year, month, day, hour, minn, second)
+    
+    return last_hour_date
 
-def getMonth(creationDate):
-    return creationDate.split('T')[0].split('-')[1]
-
-def getDay(creationDate):
-    return creationDate.split('T')[0].split('-')[2]
-
-def getHour(creationDate):
-    return creationDate.split('T')[1].split(':')[0]
-
-def create_partition_columns(df):
-    #### Register functions as Spark UDFs 
-    udf_getYear = UserDefinedFunction(getYear, StringType())
-    udf_getMonth = UserDefinedFunction(getMonth, StringType())
-    udf_getDay = UserDefinedFunction(getDay, StringType())
-    udf_getHour = UserDefinedFunction(getHour, StringType())
-
-    df = df.withColumn('ingestion_year', udf_getYear(df.creationdate)) \
-           .withColumn('ingestion_month', udf_getMonth(df.creationdate)) \
-           .withColumn('ingestion_day', udf_getDay(df.creationdate)) \
-           .withColumn('ingestion_hour', udf_getHour(df.creationdate))
+def create_partition_columns(df, last_hour_date):
+    df = df.withColumn('ingestion_year', lit(last_hour_date.year)) \
+           .withColumn('ingestion_month', lit(last_hour_date.month)) \
+           .withColumn('ingestion_day', lit(last_hour_date.day)) \
+           .withColumn('ingestion_hour', lit(last_hour_date.hour))
 
     return df
 
@@ -153,12 +156,23 @@ def _read_args():
 
 ## Run PySpark
 
+def get_read_path(s3_read_path, last_hour_date):
+    """Reading dataset to partition (last one hour of data streamed by firehose)"""
+    path = "s3://" + s3_read_path \
+        + "/ingestion_year=" + last_hour_date.year \
+        + "/ingestion_month=" + last_hour_date.month \
+        + "/ingestion_day=" + last_hour_date.day \
+        + "/ingestion_hour=" + last_hour_date.hour
+    
+    return path
+
 def main():
     s3_read_path, s3_destination_path = _read_args()
-    
-    df = spark.read.parquet("s3://" + s3_read_path)
+    last_hour_date = get_last_hour_date()
+
+    df = spark.read.parquet(get_read_path(s3_read_path, last_hour_date))
     df = create_stage_data(df)
-    df = create_partition_columns(df)
+    df = create_partition_columns(df, last_hour_date)
     
     df.repartition('ingestion_year','ingestion_month','ingestion_day', 'ingestion_hour') \
         .write \
