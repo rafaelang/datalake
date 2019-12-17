@@ -15,8 +15,9 @@ from pytz import timezone
 
 spark = SparkSession \
     .builder \
-    .appName('Creating Stage Data Orders')\
+    .appName('Creating Stage Data Orders') \
     .getOrCreate()
+
 
 ## Creating Struct Constants
 
@@ -76,12 +77,12 @@ def delete_irrelevant_columns_in_shipping_data(data):
     new_shipping_data = {}
     if(data and "shippingdata" in data):
         shipping_data = data["shippingdata"]
-        new_shipping_data["Address"] = shipping_data["Address"]
+        new_shipping_data["Address"] = shipping_data.get("Address")
         
-        if("ReceiverName" in new_shipping_data["Address"]):
+        if(new_shipping_data["Address"] and ("ReceiverName" in new_shipping_data["Address"])):
             del new_shipping_data["Address"]["ReceiverName"]
         
-        new_shipping_data["LogisticsInfo"] = shipping_data["LogisticsInfo"]
+        new_shipping_data["LogisticsInfo"] = shipping_data.get("LogisticsInfo")
     
     return new_shipping_data
 
@@ -171,6 +172,7 @@ def main():
     last_hour_date = get_last_hour_date()
 
     df = spark.read.parquet(get_read_path(s3_read_path, last_hour_date))
+
     df = create_stage_data(df)
     df = create_partition_columns(df, last_hour_date)
     
