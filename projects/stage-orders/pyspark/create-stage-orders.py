@@ -159,7 +159,7 @@ def _read_args():
 
 def get_read_path(s3_read_path, last_hour_date):
     """Reading dataset to partition (last one hour of data streamed by firehose)"""
-    path = "s3://" + s3_read_path \
+    path = s3_read_path \
         + "/ingestion_year=" + last_hour_date.year \
         + "/ingestion_month=" + last_hour_date.month \
         + "/ingestion_day=" + last_hour_date.day \
@@ -180,6 +180,6 @@ def main():
         .write \
         .partitionBy('ingestion_year','ingestion_month','ingestion_day', 'ingestion_hour') \
         .mode('append') \
-        .parquet('s3://' + s3_destination_path)
+        .parquet(s3_destination_path)
 
 main()
