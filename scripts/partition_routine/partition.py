@@ -44,20 +44,20 @@ def get_dataset_path(datasrc_s3):
 
 
 ### Creating partitions: Day, Month and Year
-def getYear(lastChange, creationDate):
+def getYear(creationDate, lastChange=None):
     date = lastChange if lastChange is not None else creationDate
     return date.split('T')[0].split('-')[0]
 
-def getMonth(lastChange, creationDate):
+def getMonth(creationDate, lastChange=None):
     date = lastChange if lastChange is not None else creationDate
     return date.split('T')[0].split('-')[1]
 
-def getDay(lastChange, creationDate):
+def getDay(creationDate, lastChange=None):
     date = lastChange if lastChange is not None else creationDate
     return date.split('T')[0].split('-')[2]
 
 
-def create_partition_columns(df):
+def create_partition_columns(df, use_last_change):
     """Create the Columns for the Partitions"""
 
     # Register functions as Spark UDFs 
@@ -65,9 +65,14 @@ def create_partition_columns(df):
     udf_getMonth = UserDefinedFunction(getMonth, StringType())
     udf_getDay = UserDefinedFunction(getDay, StringType())
 
-    df = df.withColumn('YEAR', udf_getYear(df.lastchange, df.creationdate))
-    df = df.withColumn('MONTH', udf_getMonth(df.lastchange, df.creationdate))
-    df = df.withColumn('DAY', udf_getDay(df.lastchange, df.creationdate))
+    if(use_last_change):
+        df = df.withColumn('YEAR', udf_getYear(df.creationdate, df.lastchange))
+        df = df.withColumn('MONTH', udf_getMonth(df.creationdate, df.lastchange))
+        df = df.withColumn('DAY', udf_getDay(df.creationdate, df.lastchange))
+    else:
+        df = df.withColumn('YEAR', udf_getYear(df.creationdate))
+        df = df.withColumn('MONTH', udf_getMonth(df.creationdate))
+        df = df.withColumn('DAY', udf_getDay(df.creationdate))
 
     return df
 
@@ -79,14 +84,21 @@ def _read_args():
         help='S3 URI where save parquet files', \
         default='s3://vtex.datalake/consumable_tables/'
     )
+    parser.add_argument(
+        '--use-last-change',
+        help='Flag to use or not lastChange date',
+        default='false'
+    )
     parser.add_argument('--datasrc-s3')        
     args=parser.parse_args()
-    return args.datasrc_s3, args.destination_path
+    use_last_change = args.use_last_change == "true"
+
+    return args.datasrc_s3, args.destination_path, use_last_change
 
 
 if __name__ == "__main__":
-    datasrc_s3, destination_path = _read_args()
-
+    datasrc_s3, destination_path, use_last_change = _read_args()
+    
     ### Config SparkContext
     spark = SparkSession \
         .builder \
@@ -95,7 +107,7 @@ if __name__ == "__main__":
 
     datapath = get_dataset_path(datasrc_s3)
     df = spark.read.parquet(datapath)
-    df = create_partition_columns(df)
+    df = create_partition_columns(df, use_last_change)
 
     #### Save table to S3 using Parquet format and partitioning by defined columns
     df \
