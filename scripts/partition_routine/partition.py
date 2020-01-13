@@ -1,6 +1,6 @@
 # coding: utf-8
 
-from pyspark.sql.functions import UserDefinedFunction
+from pyspark.sql.functions import UserDefinedFunction, lit
 from pyspark.sql.types import *
 from pyspark.context import SparkContext
 from pyspark.sql.session import SparkSession
@@ -23,13 +23,13 @@ class MTime(object):
         self.second = s_srt
 
 
-def get_last_hour_date(timezone_str='UTC'):    
+def get_last_hour_date(timezone_str='UTC'):
     now = datetime.now(timezone(timezone_str))
     last_hour_date = now - timedelta(hours=1)
     year, month, day = str(last_hour_date).split(' ')[0].split('-')
     hour, minn, second, _ = str(last_hour_date).split(' ')[1].split(':')
     last_hour_date = MTime(year, month, day, hour, minn, second)
-    
+
     return last_hour_date
 
 
@@ -44,7 +44,7 @@ def get_dataset_path(datasrc_s3, datetime_partition=get_last_hour_date()):
         Reading dataset to partition (last one hour of data streamed by firehose)
 
         Args:
-            - datasrc (str):  root path of s3 bucket 
+            - datasrc (str):  root path of s3 bucket
             - datetime_partition (MTime): get path on s3 based on hour of creation of objects
     """
     path = datasrc_s3 \
@@ -56,37 +56,37 @@ def get_dataset_path(datasrc_s3, datetime_partition=get_last_hour_date()):
 
 
 ### Creating partitions: Day, Month and Year
-def getYear(creationDate, lastChange=None):
+
+YEAR_INDEX = 0
+MONTH_INDEX = 1
+DAY_INDEX = 2
+
+def getIntervalTime(creationDate, time_index, lastChange=None):
+    """
+        Extracts year, month or day information from datatime string.
+
+        Args:
+            - creationDate (str): datetime string of creation date of order.
+            - lastChange (str): if exists, datetime string of last modification of order.
+            - time_index (int): 0 for extracting year info, 1 for month and 2 for day.
+    """
     date = lastChange if lastChange is not None else creationDate
-    return date.split('T')[0].split('-')[0]
-
-
-def getMonth(creationDate, lastChange=None):
-    date = lastChange if lastChange is not None else creationDate
-    return date.split('T')[0].split('-')[1]
-
-
-def getDay(creationDate, lastChange=None):
-    date = lastChange if lastChange is not None else creationDate
-    return date.split('T')[0].split('-')[2]
-
+    return date.split('T')[0].split('-')[time_index]
 
 def create_partition_columns(df, use_last_change):
     """Create the Columns for the Partitions"""
 
-    # Register functions as Spark UDFs 
-    udf_getYear = UserDefinedFunction(getYear, StringType())
-    udf_getMonth = UserDefinedFunction(getMonth, StringType())
-    udf_getDay = UserDefinedFunction(getDay, StringType())
+    # Register functions as Spark UDFs
+    udf_getIntervalTime = UserDefinedFunction(getIntervalTime, StringType())
 
     if(use_last_change):
-        df = df.withColumn('YEAR', udf_getYear(df.creationdate, df.lastchange))
-        df = df.withColumn('MONTH', udf_getMonth(df.creationdate, df.lastchange))
-        df = df.withColumn('DAY', udf_getDay(df.creationdate, df.lastchange))
+        df = df.withColumn('YEAR', udf_getIntervalTime(df.creationdate, lit(YEAR_INDEX), df.lastchange))
+        df = df.withColumn('MONTH', udf_getIntervalTime(df.creationdate, lit(MONTH_INDEX), df.lastchange))
+        df = df.withColumn('DAY', udf_getIntervalTime(df.creationdate, lit(DAY_INDEX), df.lastchange))
     else:
-        df = df.withColumn('YEAR', udf_getYear(df.creationdate))
-        df = df.withColumn('MONTH', udf_getMonth(df.creationdate))
-        df = df.withColumn('DAY', udf_getDay(df.creationdate))
+        df = df.withColumn('YEAR', udf_getIntervalTime(df.creationdate, lit(YEAR_INDEX)))
+        df = df.withColumn('MONTH', udf_getIntervalTime(df.creationdate, lit(MONTH_INDEX)))
+        df = df.withColumn('DAY', udf_getIntervalTime(df.creationdate, lit(DAY_INDEX)))
 
     return df
 
@@ -94,7 +94,7 @@ def create_partition_columns(df, use_last_change):
 def _read_args():
     parser=argparse.ArgumentParser()
     parser.add_argument(
-        '--destination-path', 
+        '--destination-path',
         help='S3 URI where save parquet files', \
         default='s3://vtex.datalake/consumable_tables/'
     )
@@ -108,8 +108,8 @@ def _read_args():
         help="Partition objects created on this specific date and hour. " \
             + "If None, current last hour will be used. Format: yyyy-MM-dd_hh:mm:ss",
         default=None
-    )    
-    parser.add_argument('--datasrc-s3')        
+    )
+    parser.add_argument('--datasrc-s3')
     args=parser.parse_args()
     use_last_change = args.use_last_change == "true"
 
@@ -118,7 +118,7 @@ def _read_args():
 
 if __name__ == "__main__":
     datasrc_s3, destination_path, use_last_change, datetime_partition = _read_args()
-    
+
     ### Config SparkContext
     spark = SparkSession \
         .builder \
@@ -130,7 +130,7 @@ if __name__ == "__main__":
         datapath = get_dataset_path(datasrc_s3, datetime_partition)
     else:
         datapath = get_dataset_path(datasrc_s3)
-        
+
     df = spark.read.parquet(datapath)
     df = create_partition_columns(df, use_last_change)
 
@@ -141,4 +141,3 @@ if __name__ == "__main__":
         .partitionBy(['YEAR','MONTH','DAY']) \
         .mode('append') \
         .parquet(destination_path)
-    
