@@ -32,6 +32,13 @@ HOME_HADOOP = '/home/hadoop/'
 
 
 def generate_steps(folder_prefix, destination_path):
+    """
+        Create definitions for EMR steps.
+        Args:
+            - folder_prefix (str): a char among the following 0123456789abcdef. This represents a prefix of a set of folders on s3 bucket.
+            - destination_path (str): where to save partitioned data on s3 data lake bucket.
+    """    
+
     copy_script_step = {
         'Name': 'Get partition spark script',
         'ActionOnFailure': 'TERMINATE_CLUSTER',
@@ -60,6 +67,8 @@ def generate_steps(folder_prefix, destination_path):
 
 
 def get_instances_descriptions():
+    """Returns the specifications of instances to be required on EC2.""" 
+
     return {
         'InstanceGroups': [
             {
@@ -85,6 +94,15 @@ def get_instances_descriptions():
  
 
 def submit_cluster(cluster_seq, config_from_json, destination_path):
+    """
+        Create definitions for EMR steps.
+        Args:
+            - cluster_seq (str): Each cluster started on EMR is responsible for process folders, 
+                on data lake s3 bucket, under a prefix (cluster seq) among the following 0123456789abcdef.
+            - config_from_json (str): string json with configuration of spark application.
+            - destination_path (str): where to save partitioned data on s3 data lake bucket.
+    """
+
     configurations = config_from_json or []
 
     cluster_id = emr_client.run_job_flow(
