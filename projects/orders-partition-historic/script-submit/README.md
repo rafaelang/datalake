@@ -1,4 +1,4 @@
-You can trigger the partition historic orders scripts flow on your machine using the `submit_cluster_with_spark_partition_jobs.py` script. It will request EC2 instances, set up machines and run the orders partition script. For that, you only need to run the script `submit_cluster_with_spark_partition_jobs.py` on your local machine. It will only be needed to have aws cli installed.
+You can trigger the partition historic orders scripts flow on your machine using the `submit_cluster_with_spark_partition_jobs.py` script. It will request EC2 instances, set up machines and run the orders partition script. You can run the script `submit_cluster_with_spark_partition_jobs.py` on your local machine. It will only be needed to have aws cli installed.
  
 ## Usage
 

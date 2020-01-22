@@ -2,7 +2,7 @@
 from pyspark.context import SparkContext
 from pyspark.sql.session import SparkSession
 
-from pyspark.sql.functions import UserDefinedFunction, col
+from pyspark.sql.functions import UserDefinedFunction, col, lit
 from pyspark.sql.types import *
 
 from pyspark.sql.utils import AnalysisException
@@ -118,6 +118,7 @@ def remove_attachments(df, cleansed_df):
             
     return df
 
+
 def clean_item_metadata(item_metadata):
     '''
         Remove malformed inner fields from json object (assemblyOptions).
@@ -136,31 +137,35 @@ def clean_item_metadata(item_metadata):
     
     return Row(**item_metadata)
 
+
 ### Creating partitions: Day, Month and Year
-def getYear(creationDate):
-    return creationDate.split('T')[0].split('-')[0]
 
-def getMonth(creationDate):
-    return creationDate.split('T')[0].split('-')[1]
+YEAR_INDEX = 0
+MONTH_INDEX = 1
+DAY_INDEX = 2
+HOUR_INDEX = 0
+IS_DATE = 0
+IS_TIME = 1
 
-def getDay(creationDate):
-    return creationDate.split('T')[0].split('-')[2]
+def getIntervalTime(creationDate, interval_time, date_index):
+    """
+        Extracts year, month or day information from datatime string.
+        Args:
+            - creationDate (str): datetime string of creation date of order.
+            - interval_time (int): 0 for date (y, m, d), 1 for time (h, m, s).
+            - date_index (int): 0 for extracting year info, 1 for month and 2 for day.
+    """
+    return creationDate.split('T')[0].split('-')[date_index]
 
-def getHour(creationDate):
-    return creationDate.split('T')[1].split(':')[0]
 
 ### Create the Columns for the Partitions
 def create_partition_columns(df):
-    #### Register functions as Spark UDFs 
-    udf_getYear = UserDefinedFunction(getYear, StringType())
-    udf_getMonth = UserDefinedFunction(getMonth, StringType())
-    udf_getDay = UserDefinedFunction(getDay, StringType())
-    udf_getHour = UserDefinedFunction(getHour, StringType())    
+    udf_getIntervalTime = UserDefinedFunction(getIntervalTime, StringType())    
 
-    df = df.withColumn('ingestion_year', udf_getYear(df.CreationDate))
-    df = df.withColumn('ingestion_month', udf_getMonth(df.CreationDate))
-    df = df.withColumn('ingestion_day', udf_getDay(df.CreationDate))
-    df = df.withColumn('ingestion_hour', udf_getHour(df.CreationDate))
+    df = df.withColumn('ingestion_year', udf_getIntervalTime(df.creationdate, lit(IS_DATE), lit(YEAR_INDEX)))
+    df = df.withColumn('ingestion_month', udf_getIntervalTime(df.creationdate, lit(IS_DATE), lit(MONTH_INDEX)))
+    df = df.withColumn('ingestion_day', udf_getIntervalTime(df.creationdate, lit(IS_DATE), lit(DAY_INDEX)))
+    df = df.withColumn('ingestion_hour', udf_getIntervalTime(df.creationdate, lit(IS_TIME), lit(HOUR_INDEX)))
 
     return df
 
@@ -218,11 +223,18 @@ def rewriteColumnNames(df):
 if __name__ == "__main__":
     folder_prefix_filter, destination_path = _read_args()
     
+    S3_BUCKET_HISTORIC_DATA = 'vtex-analytics-import'
+    S3_BUCKET_REPLICATION_DATA = 'vtex-orders-index'
+    S3_BUCKET_DATALAKE = 'vtex.datalake'
+
+    S3_DATALAKE_SCHEMA_DIR = 'sample_schema/orders'
+
     ## Getting Schema's Interface from Checkout Structured Json
-    cleansed_df = spark.read.json(get_all_paths('vtex.datalake', 'sample_schema/orders'))
+    cleansed_df = spark.read.json(get_all_paths(S3_BUCKET_DATALAKE, S3_DATALAKE_SCHEMA_DIR))
 
     ## Reading data from Checkout History
-    df = spark.read.json(get_all_paths('vtex-analytics-import', 'vtex-orders-index/'+folder_prefix_filter))
+    df = spark.read.json(
+        get_all_paths(S3_BUCKET_HISTORIC_DATA, S3_BUCKET_REPLICATION_DATA + '/'+ folder_prefix_filter))
 
     ## Temporary column to convert df data to JSON. 
     df = df.withColumn("ToJSON", to_json(struct([df[x] for x in df.columns])))    
