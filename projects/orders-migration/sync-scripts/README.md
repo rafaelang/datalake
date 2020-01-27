@@ -1,0 +1,2 @@
+
+> Note: all logs and output from the executation of theses scripts on EC2 instances on the Orders migration process are [saved on s3](https://s3.console.aws.amazon.com/s3/buckets/vtex.datalake/scripts/migration_orders_script_gen/?region=us-east-2&tab=overview)

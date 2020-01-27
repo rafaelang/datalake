@@ -1,0 +1,2 @@
+
+> The complete documentation about the Orders Migration process is [here](https://github.com/vtex/datalake/blob/master/docs/data_migration/oms/README.md). You will also learn how to execute /sync-scripts. 

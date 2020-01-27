@@ -18,7 +18,7 @@ Because OMS bucket replication was performed long after the (source) bucket bega
 
 OMS data is saved on s3 bucket in the Virginia region. The Analytics bucket where we save migration data is in the Ohio region. So the problem we are trying to solve is **copying data between buckets in different regions between two different accounts**.
 
-For migration, we used EC2 service to provision **X instances** of high capacity  (**type: m5.4xlarge, with 16 VCPus, 64 Mem**). Why 16 instances? # TODO
+For migration, we used EC2 service to provision **16 instances** of high capacity (**type: m5.4xlarge, with 16 VCPus, 64 Mem**). 
 
 ### Permissions
 
@@ -103,13 +103,20 @@ Access EC2 on AWS and click _Launch Instance_.
     - If you want to create a new security group, add rules that give you ssh access as commented above.
 7. Review the information and click `Launch` (select or create a new security key).
 
+We requested 16 instances because in the source bucket the OMS data is divided in folders named with hexadecimal representation. So, in each instance we requested we would do the migration for folders only prefixed by one from the sixteen hexadecial chars.
+
 ### Copying files
 
-To copy the data from the source bucket, you must execute a `aws cli` command called` sync`. The instance created in the previous step already comes with aws cli installed (because of the AMI selected in step 1). Run the command within the instance.
+To copy the data from the source bucket, you must execute a `aws cli` command called `sync`. The instance created in the previous step already comes with aws cli installed (because of the AMI selected in step 1). 
+However, to automate the executation of the sync command, we created alternative scripts to list and sync every file on the source bucket. It happens that the sync command lists files if you try to sync a directory, making requests to s3. But we know that the source Orders bucket is extremely divided, with so many inner folders. So simply running on the root of the bucket would consume more time and price than previsouly listing all files on bucket. And we can do it, listing files, because we know the structure of folders on source bucket (hexadecimal prefixes).
 
-#### Connecting to the instance
+#### Connecting to instances
 
+<<<<<<< HEAD
 Go back to EC2 home page, click on "Instances", select the one previously launched, click on "Connect" and follow instructions.
+=======
+Go back to EC2 home page, click on menu "Instances", select the one previously launched, click on "Connect" and follow instructions.
+>>>>>>> Add sync script for Orders migration
 
 ![Connect to instance](imgs/connect.png)
 
@@ -121,42 +128,16 @@ Open the terminal, access the instance. Install the htop command.
 
 #### Syncing data
 
-For each instance, run the 32 commands (each command representing the sync of a folder) assigned to it.
+When connected to the EC2 instance, download the [sync scripts](https://github.com/vtex/datalake/tree/master/projects/orders-migration/sync-scripts). They are also [saved on s3](https://s3.console.aws.amazon.com/s3/buckets/vtex.datalake/scripts/migration_orders_script_gen/?region=us-east-2&tab=overview), so you can 
 
-Sync command ex:
-`` `
-aws s3 sync --quiet <s3: source_path> <s3: target_path> &
-`` `
+`aws s3 cp s3://vtex.datalake/scripts/migration_orders_script_gen/ ./ --exclude "*" --include "*.sh"` to download them.
 
-Follow the data transfer process on EC2/instance/monitoring or using htop.
+1. The first script `script1-migrate-gen.sh` generates several identical subscripts, each one with several sync commands lines. The difference between the files is the hexadecimal prefix (with 4 chars) they list (ex: one file list F140* and another one list for F141*). Theses scripts are saved ona folder called /scripts-migrate. The `script1-migrate-gen.sh` receives a argument, that can be [0-9A-F]. Each EC2 instance will migrate one prefix, from 0 to F. So in each instance you will run `script1-migrate-gen.sh` (and next scripts) passing the appropriate hexadecimal prefix for the instance.
 
-This document is based on [docs](https://docs.google.com/document/d/1LFyubm8vLXcrdPxL09WxzKsvQ-HMmirGIqZBZazuCf0/edit#) created when specific checkout data is migrated.
+2. The second script `script2-exec-migration.sh` will run the sync command on /scripts-migrate scripts and save thair outputs, including errors.
 
+Due to the large charge of requests on syncing so many files, errors will happen. So the next two scripts read the output files saved on step 2 above, get the files that could not be synced and retry them.
 
-## Data Transformation
+3. The third script `script3-gen_cp_from_log.py` read output files from a directory (passed as --logs-dir argument) and append a command sync (for each file whose sync did not complete previsouly) to a file you pass as --output-script argument.
 
-Once copied to the Analytics account, Checkout data is raw. They need to be transformed (structured) and partitioned. Since this is a very large dataset (approx 4 terabytes), we decided to use a [script](https://github.com/vtex/datalake/tree/master/aws/EMR/partitioning_history_checkout_data) in pyspark.
-To run spark jobs, we decided to do it in the context of a cluster created with aws EMR service. But with which configuration to create this cluster, so as to best utilize machine resources and finish processing successfully?
-Throughout the experiments we have had some memory overflow issues or resource misuse or excessive run time issues required to complete jobs. After some testing, we come to the following configuration:
-
-We required 32 clusters, each with the following configuration:
-   - 1 machine r5.2xlarge type Master 
-   - 2 machines c5.4xlarge type Core
-
-> **WARNING**: Importantly, when using machines with large resources, spark does not always run jobs using this avaible resources. You must explicitly state the amount of memory spark can consume, the amount of parallelization (CPU's), etc. Therefore, we use [this script](https://github.com/vtex/datalake/blob/master/aws/EMR/partitioning_history_checkout_data/gen_config_cluster_spark.py) to configure clusters to best use instance resources.
-
-Each cluster is responsible for transforming 16 folders ("divide and conquer"). For example:
-- cluster A gets the folders 00_CheckourtOrder, 01_CheckoutOrder, ..., 0E_CheckoutOrder, 0F_CheckoutOrder
-- cluster B is responsible for 40_FulfillmentOrder, 41_FulfillmentOrder, ..., 4E_FulfillmentOrder, 4F_FulfillmentOrder.
-
-Each folder must correspond to a spark job. Therefore, once a cluster is created, each folder must have an associated _step_. This _step_ means exactly submitting the partitioning script to a folder (eg 41_FulfillmentOrder). This is possible because [script](https://github.com/vtex/datalake/tree/master/aws/EMR/partitioning_history_checkout_data) takes a folder as an argument ([read](https://github.com/vtex/datalake/tree/master/aws/EMR/partitioning_history_checkout_data) more about how the script works). We use _[another script](https://github.com/vtex/datalake/tree/master/scripts/checkout_partition_history)_ to create all the clusters needed to transform and partition Checkout data, indicating in each one already a step specific to a subfolder, passed as an argument.
-
-### Faced problems 
-
-Some problems arose during the cluster transformation and configuration processes. Here we will report what these problems were and how we solved them.
-
-The process of structuring the checkoutOrder data went smoothly with the data itself. The same did not happen with the fulfillmentOrder data.
-   - Some steps were not performed because folders (each step is related to a folder) did not exist in our buckets on s3. As a result, we found that the data migration process (described above) failed for three fulfillmentOrder folders (E9__FulfillmentOrder, ED__FulfillmentOrder, FA__FulfillmentOrder).
-   - Some folders (50_FulfillmentOrder, F0_FulfillmentOrder, D0_FulfillmentOrder, C0_FulfillmentOrder) failed after two minutes of spark job execution. This is thought to be an AWS infrastructure-related load issue as we fired all 16 clusters at the same time, and the first few steps (* 0_FulfillmentOrder) of some clusters failed without a specific error message. Also, at the end of the process, we just ran these 4 steps again (without any changes) and they ran without any errors.
-   - There were failures in folders [22, 0D, 1D, 83, FE, F9] _FulfillmentOrder, related to a problem that occurred on October 31, 2018 at 14h that generated files with names with special characters. Spark crashed when attempting to read these files (it was reported that the paths to the files did not exist). Fortunately, the error messages indicated which _path_ had broken execution. We decided to rename the specific files, removing the special characters, and rerun the jobs.
-   - The 86_FulfillmentOrder folder structure failed because there were subfolders within the paths below */id/. These subfolders are anomalies within the bucket folder structure. The script tries to read any json just below /id . And then when spark lists the file paths before  read them, the pathes for files within those subfolders are malformed (it expects a json and finds a folder), generating blanks that, in a later attempt to read, lead to nonexistent paths.
+4. Finally the last script read the output script from the step before (but you must indicate it as --input-script) and generates a final script (--output-script) parallelizing the executation of the sync (this saves times when running this output script on instances with multiple vCPUs)
