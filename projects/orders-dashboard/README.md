@@ -1,13 +1,17 @@
 
 This project was developed with the aim of building a dashboard with orders created during the black friday (2019).
-New orders created while the app was running would be transformed and generate one tabular data that
+New orders created while the app was running would be transformed to generate one tabular data that
 would be the input to the visualization on dashboard. 
 
 
 ## Run locally
 
 To run locally, best advise is to use an IDE and sbt (dependencies management tool for Scala projects). 
-On `/src/main/scala/Main.scala`, change the values for variables inputDir and outputDir to absolute local paths.
+On `/src/main/scala/Main.scala`, change the values for variables inputDir and outputDir to absolute local paths.  
+Example: 
+`
+val inputDir: String = "/home/italohmb/path/to/parquet/data/*"
+`  
 After starting application, copy some new .parquet files to the inputDir (to simulate new files to be streamed).
 
 ## Run on EC2 instances
