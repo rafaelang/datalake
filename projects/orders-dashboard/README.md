@@ -12,6 +12,10 @@ Example:
 `
 val inputDir: String = "/home/italohmb/path/to/parquet/data/*"
 `  
+
+Also, still on Main.scala, add the the following line just after `.appName("BlackFridayDashboard")`:  
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`.master("local[*]")`
+
 After starting application, copy some new .parquet files to the inputDir (to simulate new files to be streamed).
 
 ## Run on EC2 instances
