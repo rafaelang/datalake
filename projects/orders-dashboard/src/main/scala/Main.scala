@@ -83,7 +83,7 @@ object Main {
         ssc.sparkContext.hadoopConfiguration)
 
     stream
-      .map(_._2)
+      .map{case (_, record) => record}
       .transform(rdd => rdd.map(record => record.toString))
       .foreachRDD((rdd: RDD[String], time: Time) => {
 

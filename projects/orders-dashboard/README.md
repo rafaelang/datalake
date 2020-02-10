@@ -10,13 +10,14 @@ To run locally, best advise is to use an IDE and sbt (dependencies management to
 On `/src/main/scala/Main.scala`, change the values for variables inputDir and outputDir to absolute local paths.  
 Example: 
 `
-val inputDir: String = "/home/italohmb/path/to/parquet/data/*"
+val inputDir: String = "/home/italohmb/path/to/parquet/data/"
 `  
 
 Also, still on Main.scala, add the the following line just after `.appName("BlackFridayDashboard")`:  
       &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`.master("local[*]")`
 
 After starting application, copy some new .parquet files to the inputDir (to simulate new files to be streamed).
+Testing locally, use your terminal and cp commands to copy these files.
 
 ## Run on EC2 instances
 
