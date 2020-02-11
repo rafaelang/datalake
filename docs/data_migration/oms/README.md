@@ -85,7 +85,7 @@ This policy _allows any list, get and put s3 action_ on the indicated bucket.
 
 ### Launching instances
 
-First, you need to ensure that you are ordering an instance that is in the same region as the source bucket (for VTEX, this region is usually virgin / us-east-1). Using the UI, you can change the region in the middle menu in the upper right corner of the screen.
+First, you need to ensure that you are launching an instance that is in the same region as the source bucket (for VTEX, this region is usually virgin / us-east-1). Using the UI, you can change the region in the middle menu in the upper right corner of the screen.
 
 Access EC2 on AWS and click _Launch Instance_.
 
@@ -112,11 +112,7 @@ However, to automate the executation of the sync command, we created alternative
 
 #### Connecting to instances
 
-<<<<<<< HEAD
-Go back to EC2 home page, click on "Instances", select the one previously launched, click on "Connect" and follow instructions.
-=======
 Go back to EC2 home page, click on menu "Instances", select the one previously launched, click on "Connect" and follow instructions.
->>>>>>> Add sync script for Orders migration
 
 ![Connect to instance](imgs/connect.png)
 
