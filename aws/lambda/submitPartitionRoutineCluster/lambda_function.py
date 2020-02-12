@@ -94,7 +94,8 @@ def lambda_handler(event, context):
                     'Jar': 'command-runner.jar',
                     'Args': ['spark-submit', '--deploy-mode', 'client', HOME_HADOOP + SCRIPT_NAME,
                         '--destination-path', DESTINATION_S3_URI_PREFIX + CHECKOUT + '/',
-                        '--datasrc-s3', DATASRC_S3_PREFIX + CHECKOUT_SRC + "order/"]
+                        '--datasrc-s3', DATASRC_S3_PREFIX + CHECKOUT_SRC + "order/",
+                        '--use-last-change', 'true']
                 }
             },
             {
@@ -104,17 +105,8 @@ def lambda_handler(event, context):
                     'Jar': 'command-runner.jar',
                     'Args': ['spark-submit', '--deploy-mode', 'client', HOME_HADOOP + SCRIPT_NAME,
                         '--destination-path', DESTINATION_S3_URI_PREFIX + FULFILLMENT + '/',
-                        '--datasrc-s3', DATASRC_S3_PREFIX + FULFILLMENT_SRC + "order/"]
-                }
-            },
-            {
-                'Name': 'Run pyspark script for ORDERS',
-                'ActionOnFailure': 'CONTINUE',
-                'HadoopJarStep': {
-                    'Jar': 'command-runner.jar',
-                    'Args': ['spark-submit', '--deploy-mode', 'client', HOME_HADOOP + SCRIPT_NAME,
-                        '--destination-path', DESTINATION_S3_URI_PREFIX + ORDERS + '/',
-                        '--datasrc-s3', DATASRC_S3_PREFIX + ORDERS_SRC]
+                        '--datasrc-s3', DATASRC_S3_PREFIX + FULFILLMENT_SRC + "order/",
+                        '--use-last-change', 'true']
                 }
             },
             {
