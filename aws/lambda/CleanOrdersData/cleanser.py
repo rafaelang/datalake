@@ -24,12 +24,12 @@ def remove_attachments(dic):
             a copy of the input dict without any `attachment` field.
     '''    
     dic_copy = dic.copy()
-    for key in dic_copy:
+    for key in dic:
         if(ATTACHMENT in key.lower()):
-            del dic[key]
-        elif(type(dic_copy[key]) == dict):
-            remove_attachments(dic[key])
-        elif(type(dic_copy[key]) == list):
+            del dic_copy[key]
+        elif(type(dic[key]) == dict):
+            remove_attachments(dic_copy[key])
+        elif(type(dic[key]) == list):
             for item in dic_copy[key]:
                 if(type(item) == dict):
                     remove_attachments(item)
@@ -45,11 +45,12 @@ def clean_itemmetadata(itemmetadata):
         Returns:
             the input argument but with structure changes inner fields.         
     '''    
-    len_items_itemmetadata = len(itemmetadata["Items"])
+    itemmetadata_cp = itemmetadata
+    len_items_itemmetadata = len(itemmetadata_cp["Items"])
     for i in range(len_items_itemmetadata):
-        if ("AssemblyOptions" in itemmetadata["Items"][i]):
-            del itemmetadata["Items"][i]["AssemblyOptions"]
-    return itemmetadata
+        if ("AssemblyOptions" in itemmetadata_cp["Items"][i]):
+            del itemmetadata_cp["Items"][i]["AssemblyOptions"]
+    return itemmetadata_cp
     
     
 def clean_ratesandbenefitsdata(rtbndata):
@@ -64,26 +65,30 @@ def clean_ratesandbenefitsdata(rtbndata):
     KEY_IDENTIFIERS = "RateAndBenefitsIdentifiers"
     KEY_MATCH_PARAMS = "MatchedParameters"
     KEY_ADDINFO = "AdditionalInfo"
-    for i in range(len(rtbndata[KEY_IDENTIFIERS])):
-        if KEY_MATCH_PARAMS in rtbndata[KEY_IDENTIFIERS][i]:
-            del rtbndata[KEY_IDENTIFIERS][i][KEY_MATCH_PARAMS]
-        if KEY_ADDINFO in rtbndata[KEY_IDENTIFIERS][i]:            
-            del rtbndata[KEY_IDENTIFIERS][i][KEY_ADDINFO]
-    return rtbndata
+
+    rtbndata_cp = rtbndata
+    for i in range(len(rtbndata_cp[KEY_IDENTIFIERS])):
+        if KEY_MATCH_PARAMS in rtbndata_cp[KEY_IDENTIFIERS][i]:
+            del rtbndata_cp[KEY_IDENTIFIERS][i][KEY_MATCH_PARAMS]
+        if KEY_ADDINFO in rtbndata_cp[KEY_IDENTIFIERS][i]:            
+            del rtbndata_cp[KEY_IDENTIFIERS][i][KEY_ADDINFO]
+    return rtbndata_cp
 
 
 def clean_paymentdata(paydata):
     KEY_TRANSACTIONS = "Transactions"
     KEY_CONN_RESP = "connectorResponses"
     KEY_PAYMENTS = "Payments"
-    if KEY_TRANSACTIONS in paydata:
-        for i in range(len(paydata[KEY_TRANSACTIONS])):
-            if KEY_PAYMENTS in paydata[KEY_TRANSACTIONS][i]:
-                payments = paydata[KEY_TRANSACTIONS][i][KEY_PAYMENTS]
+
+    paydata_cp = paydata
+    if KEY_TRANSACTIONS in paydata_cp:
+        for i in range(len(paydata_cp[KEY_TRANSACTIONS])):
+            if KEY_PAYMENTS in paydata_cp[KEY_TRANSACTIONS][i]:
+                payments = paydata_cp[KEY_TRANSACTIONS][i][KEY_PAYMENTS]
                 for j in range(len(payments)):
                     if KEY_CONN_RESP in payments[j]:
-                        del paydata[KEY_TRANSACTIONS][i][KEY_PAYMENTS][j][KEY_CONN_RESP]
-    return paydata
+                        del paydata_cp[KEY_TRANSACTIONS][i][KEY_PAYMENTS][j][KEY_CONN_RESP]
+    return paydata_cp
 
     
 def clean_struct_json(raw_json):
