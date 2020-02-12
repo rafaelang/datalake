@@ -33,7 +33,7 @@ def remove_attachments(dic):
             for item in dic_copy[key]:
                 if(type(item) == dict):
                     remove_attachments(item)
-    return dic
+    return dic_copy
 
 
 def clean_itemmetadata(itemmetadata):
