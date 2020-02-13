@@ -99,7 +99,7 @@ Access EC2 on AWS and click _Launch Instance_.
 6. Select or create a new security group. It is important that in the security group used there is a rule that grants SSH access to your ip.
      - To edit an existing group, click on the security group.
        - In the Inbound tab, click Edit to add a new rule (SSH, TCP, 22, My Ip) and Save.
-       - ![Img](imgs/sec_group.png)
+       - ![Img](../imgs/sec_group.png)
     - If you want to create a new security group, add rules that give you ssh access as commented above.
 7. Review the information and click `Launch` (select or create a new security key).
 
@@ -114,13 +114,13 @@ However, to automate the executation of the sync command, we created alternative
 
 Go back to EC2 home page, click on menu "Instances", select the one previously launched, click on "Connect" and follow instructions.
 
-![Connect to instance](imgs/connect.png)
+![Connect to instance](../imgs/connect.png)
 
 NOTE: You must have the key indicated in step 7 to access the machine.
 
 Open the terminal, access the instance. Install the htop command.
 
-![SSH](imgs/ssh.png)
+![SSH](../imgs/ssh.png)
 
 #### Syncing data
 
