@@ -13,7 +13,7 @@ from pyspark.sql.types import Row
 
 spark = SparkSession.builder.appName('Insert orders data on data warehouse').getOrCreate()
 
-READ_PATH = "s3://vtex.datalake/raw_data/orders/parquet_stage/ingestion_year=2020/ingestion_month=02/ingestion_day=01/ingestion_hour=00/DataStreamCleansedOrders-2-2020-02-01-00-00-03-d6aaef81-6a9b-421c-b195-c67b1a088660.parquet"
+READ_PATH = "../../../data/datalake/raw_data/orders/parquet_stage/ingestion_month=02/ingestion_day=01/ingestion_hour=00"
 df = spark.read.parquet(READ_PATH)
 
 cols = [
@@ -23,6 +23,50 @@ cols = [
 ]
 
 select_df = df.select(*cols)
+
+def format_datetime_str(datetime_str):
+    datetime_pattern = '%Y-%m-%dT%H:%M:%S.%f'
+    datetime_str_without_UTC = datetime_str[:-len('XZ')]
+    datetime_object = datetime.strptime(datetime_str_without_UTC, datetime_pattern)
+
+    return str(datetime_object.replace(microsecond=0))
+
+format_datetime_str_UDF = UserDefinedFunction(format_datetime_str, StringType())
+select_df = select_df.withColumn('creation_date', format_datetime_str_UDF(select_df.creationdate))
+select_df = select_df.drop("creationdate")
+
+YEAR_INDEX = 0
+MONTH_INDEX = 1
+DAY_INDEX = 2
+
+def getIntervalTime(creationDate, time_index, lastChange=None):
+    """
+        Extracts year, month or day information from datatime string.
+        Args:
+            - creationDate (str): datetime string of creation date of order.
+            - lastChange (str): if exists, datetime string of last modification of order.
+            - time_index (int): 0 for extracting year info, 1 for month and 2 for day.
+    """
+    date = lastChange if lastChange is not None else creationDate
+    return date.split(' ')[0].split('-')[time_index]
+
+def create_partition_columns(df, use_last_change):
+    """Create the Columns for the Partitions"""
+    # Register functions as Spark UDFs
+    udf_getIntervalTime = UserDefinedFunction(getIntervalTime, StringType())
+    if(use_last_change):
+        df = df.withColumn('YEAR', udf_getIntervalTime(df.creation_date, lit(YEAR_INDEX), df.lastchange))
+        df = df.withColumn('MONTH', udf_getIntervalTime(df.creation_date, lit(MONTH_INDEX), df.lastchange))
+        df = df.withColumn('DAY', udf_getIntervalTime(df.creation_date, lit(DAY_INDEX), df.lastchange))
+    else:
+        df = df.withColumn('YEAR', udf_getIntervalTime(df.creation_date, lit(YEAR_INDEX)))
+        df = df.withColumn('MONTH', udf_getIntervalTime(df.creation_date, lit(MONTH_INDEX)))
+        df = df.withColumn('DAY', udf_getIntervalTime(df.creation_date, lit(DAY_INDEX)))
+    return df
+
+select_df = create_partition_columns(select_df, False)
+
+select_df = select_df.where(select_df.YEAR >= 2018)
 
 select_df = select_df.withColumnRenamed("hostname", "subaccount")
 select_df = select_df.withColumnRenamed("sellerorderid", "seller_order_id")
@@ -40,18 +84,6 @@ select_df = select_df.withColumn("number_itens", size(col("items")))
 select_df = select_df.drop("items")
 select_df = select_df.drop("iscompleted")
 select_df = select_df.drop("storepreferencesdata")
-
-def format_datetime_str(datetime_str):
-    datetime_pattern = '%Y-%m-%dT%H:%M:%S.%f'
-    datetime_str_without_UTC = datetime_str[:-len('XZ')]
-    datetime_object = datetime.strptime(datetime_str_without_UTC, datetime_pattern)
-
-    return str(datetime_object.replace(microsecond=0))
-
-
-format_datetime_str_UDF = UserDefinedFunction(format_datetime_str, StringType())
-select_df = select_df.withColumn('creation_date', format_datetime_str_UDF(select_df.creationdate))
-select_df = select_df.drop("creationdate")
 
 pkeys = [
     'id','subaccount','seller_order_id','order_group'
@@ -86,37 +118,6 @@ orders = select_df.join(joined, on=pkeys, how='left')
 pickup_null_to_zero = when(col("pickup_itens").isNull(), 0).otherwise(col("pickup_itens"))
 orders = orders.withColumn("pickup_itens", pickup_null_to_zero)
 orders = orders.dropDuplicates(subset = ['id','subaccount','seller_order_id','order_group'])
-
-YEAR_INDEX = 0
-MONTH_INDEX = 1
-DAY_INDEX = 2
-
-def getIntervalTime(creationDate, time_index, lastChange=None):
-    """
-        Extracts year, month or day information from datatime string.
-        Args:
-            - creationDate (str): datetime string of creation date of order.
-            - lastChange (str): if exists, datetime string of last modification of order.
-            - time_index (int): 0 for extracting year info, 1 for month and 2 for day.
-    """
-    date = lastChange if lastChange is not None else creationDate
-    return date.split(' ')[0].split('-')[time_index]
-
-def create_partition_columns(df, use_last_change):
-    """Create the Columns for the Partitions"""
-    # Register functions as Spark UDFs
-    udf_getIntervalTime = UserDefinedFunction(getIntervalTime, StringType())
-    if(use_last_change):
-        df = df.withColumn('YEAR', udf_getIntervalTime(df.creation_date, lit(YEAR_INDEX), df.lastchange))
-        df = df.withColumn('MONTH', udf_getIntervalTime(df.creation_date, lit(MONTH_INDEX), df.lastchange))
-        df = df.withColumn('DAY', udf_getIntervalTime(df.creation_date, lit(DAY_INDEX), df.lastchange))
-    else:
-        df = df.withColumn('YEAR', udf_getIntervalTime(df.creation_date, lit(YEAR_INDEX)))
-        df = df.withColumn('MONTH', udf_getIntervalTime(df.creation_date, lit(MONTH_INDEX)))
-        df = df.withColumn('DAY', udf_getIntervalTime(df.creation_date, lit(DAY_INDEX)))
-    return df
-
-orders = create_partition_columns(orders, False)
 
 orders.repartition('YEAR','MONTH','DAY') \
     .write \
