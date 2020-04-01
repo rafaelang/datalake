@@ -2,6 +2,7 @@
 # coding: utf-8
 
 import time
+import argparse 
 
 from datetime import datetime
 from pyspark.context import SparkContext
@@ -11,11 +12,26 @@ from pyspark.sql.utils import AnalysisException
 from pyspark.sql.functions import to_json, struct, col, size, explode, when, UserDefinedFunction, countDistinct, lit
 from pyspark.sql.types import Row
 
-spark = SparkSession.builder.appName('Insert orders data on data warehouse').getOrCreate()
+
+spark = SparkSession \
+    .builder \
+    .appName('Insert orders data on data warehouse') \
+    .getOrCreate()
 
 YEAR_INDEX = 0
 MONTH_INDEX = 1
 DAY_INDEX = 2
+
+cols = [
+    'id','hostname', 'shippingdata',
+    'items','sellerorderid','ordergroup', 'creationdate',
+    'origin','value','storepreferencesdata', 'iscompleted'
+]
+
+pkeys = [
+    'id','subaccount','seller_order_id','order_group'
+]
+
 
 def format_datetime_str(datetime_str):
     datetime_pattern = '%Y-%m-%dT%H:%M:%S.%f'
@@ -49,14 +65,38 @@ def create_partition_columns(df, use_last_change):
         df = df.withColumn('DAY', udf_getIntervalTime(df.creation_date, lit(DAY_INDEX)))
     return df
 
-def write_csvs(df, write_path):
+def count_pickup_items(df):
+    order_item_has_pickup = when(col("PickupStoreInfo.IsPickupStore") == True, 1).otherwise(0)
+
+    item_df = df \
+        .select('id','subaccount','seller_order_id','order_group', explode("shippingdata.LogisticsInfo").alias("LogisticsInfo")) \
+        .select('id','subaccount','seller_order_id','order_group', "LogisticsInfo.PickupStoreInfo", "LogisticsInfo.ItemIndex") \
+        .withColumn("item_with_pickup", order_item_has_pickup) \
+        .select('id','subaccount','seller_order_id','order_group', "item_with_pickup", "ItemIndex") \
+        .groupby('id','subaccount','seller_order_id','order_group', "item_with_pickup") \
+        .agg(countDistinct('ItemIndex').alias('count'))
+
+    item_df_pickup = item_df.where(col("item_with_pickup") == 1)
+    item_df_pickup = item_df_pickup.withColumnRenamed("count", "pickup_itens")
+    item_df_pickup = item_df_pickup.drop("item_with_pickup")
+
+    item_df = item_df.drop("count", "item_with_pickup")
+    item_df = item_df.dropDuplicates()
+
+    with_pickup_items = item_df.join(item_df_pickup, on=pkeys, how='left')
+
+    with_pickup_items = with_pickup_items.na.fill(0)
+
+    return with_pickup_items
+
+def write_df_to_csv(df, write_path):
     df.repartition('YEAR','MONTH','DAY') \
         .write \
         .partitionBy('YEAR','MONTH','DAY') \
         .format('csv') \
         .option("sep", ";") \
         .option("header", "false") \
-        .save('write_path')
+        .save(write_path)
 
 def _read_args():
     parser=argparse.ArgumentParser()
@@ -74,17 +114,11 @@ def _read_args():
     
     return args.s3_read_path, args.s3_destination_path
 
-## Run PySpark
+
 if __name__ == "__main__":
     s3_read_path, s3_destination_path = _read_args()
 
     df = spark.read.parquet(s3_read_path)
-
-    cols = [
-        'id','hostname', 'shippingdata',
-        'items','sellerorderid','ordergroup', 'creationdate',
-        'origin','value','storepreferencesdata', 'iscompleted'
-    ]
 
     select_df = df.select(*cols)
 
@@ -96,15 +130,15 @@ if __name__ == "__main__":
 
     select_df = select_df.where(select_df.YEAR >= 2018)
 
+    iscompleted_to_int = when(col("iscompleted") == True, 1).otherwise(0)
+
     select_df = select_df.withColumnRenamed("hostname", "subaccount")
     select_df = select_df.withColumnRenamed("sellerorderid", "seller_order_id")
     select_df = select_df.withColumnRenamed("ordergroup", "order_group")
     select_df = select_df.withColumnRenamed("origin", "origin_code")
     select_df = select_df.withColumnRenamed("value", "total_value")
-
-    iscompleted_to_int = when(col("iscompleted") == True, 1).otherwise(0)
+    
     select_df = select_df.withColumn("is_completed", iscompleted_to_int)
-
     select_df = select_df.withColumn("country_code", col("storepreferencesdata.CountryCode"))
     select_df = select_df.withColumn("currency_code", col("storepreferencesdata.CurrencyCode"))
     select_df = select_df.withColumn("number_itens", size(col("items")))
@@ -113,38 +147,14 @@ if __name__ == "__main__":
     select_df = select_df.drop("iscompleted")
     select_df = select_df.drop("storepreferencesdata")
 
-    pkeys = [
-        'id','subaccount','seller_order_id','order_group'
-    ]
-
-    order_item_has_pickup = when(col("PickupStoreInfo.IsPickupStore") == True, 1).otherwise(0)
-
-    itmd_df = select_df \
-        .select('id','subaccount','seller_order_id','order_group', explode("shippingdata.LogisticsInfo").alias("LogisticsInfo")) \
-        .select('id','subaccount','seller_order_id','order_group', "LogisticsInfo.PickupStoreInfo", "LogisticsInfo.ItemIndex") \
-        .withColumn("item_with_pickup", order_item_has_pickup) \
-        .select('id','subaccount','seller_order_id','order_group', "item_with_pickup", "ItemIndex") \
-        .groupby('id','subaccount','seller_order_id','order_group', "item_with_pickup") \
-        .agg(countDistinct('ItemIndex').alias('count'))
-
-
-    itmd_df_pickup = itmd_df.where(col("item_with_pickup") == 1)
-    itmd_df_pickup = itmd_df_pickup.withColumnRenamed("count", "pickup_itens")
-    itmd_df_pickup = itmd_df_pickup.drop("item_with_pickup")
-
-    itmd_df = itmd_df.drop("count", "item_with_pickup")
-    itmd_df = itmd_df.dropDuplicates()
-
-    joined = itmd_df.join(itmd_df_pickup, on=pkeys, how='left')
-
-    joined = joined.na.fill(0)
+    with_pickup_items = count_pickup_items(select_df)
 
     select_df = select_df.drop('shippingdata')
 
-    orders = select_df.join(joined, on=pkeys, how='left')
+    orders = select_df.join(with_pickup_items, on=pkeys, how='left')
 
     pickup_null_to_zero = when(col("pickup_itens").isNull(), 0).otherwise(col("pickup_itens"))
     orders = orders.withColumn("pickup_itens", pickup_null_to_zero)
     orders = orders.dropDuplicates(subset = ['id','subaccount','seller_order_id','order_group'])
 
-    write_csvs(orders, s3_destination_path)
+    write_df_to_csv(orders, s3_destination_path)
