@@ -96,7 +96,7 @@ def write_df_to_csv(df, write_path):
         .partitionBy('YEAR','MONTH','DAY') \
         .format('csv') \
         .option("sep", ";") \
-        .option("header", "false") \
+        .option("header", "true") \
         .mode('append') \
         .save(write_path)
 
