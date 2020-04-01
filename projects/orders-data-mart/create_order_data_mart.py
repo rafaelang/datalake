@@ -2,8 +2,8 @@
 # coding: utf-8
 
 import argparse
+import re
 import time
-import argparse 
 
 from datetime import datetime
 from pyspark.context import SparkContext
@@ -36,7 +36,7 @@ pkeys = [
 
 def format_datetime_str(datetime_str):
     datetime_pattern = '%Y-%m-%dT%H:%M:%S'
-    datetime_str_without_UTC = datetime_str.split('.')[0]
+    datetime_str_without_UTC = re.split('\.|Z', datetime_str)[0]
     datetime_object = datetime.strptime(datetime_str_without_UTC, datetime_pattern)
     
     return str(datetime_object.replace(microsecond=0))
