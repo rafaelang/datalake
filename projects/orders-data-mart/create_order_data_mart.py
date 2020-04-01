@@ -35,10 +35,10 @@ pkeys = [
 
 
 def format_datetime_str(datetime_str):
-    datetime_pattern = '%Y-%m-%dT%H:%M:%S.%f'
-    datetime_str_without_UTC = datetime_str[:-len('XZ')]
+    datetime_pattern = '%Y-%m-%dT%H:%M:%S'
+    datetime_str_without_UTC = datetime_str.split('.')[0]
     datetime_object = datetime.strptime(datetime_str_without_UTC, datetime_pattern)
-
+    
     return str(datetime_object.replace(microsecond=0))
 
 def getIntervalTime(creationDate, time_index, lastChange=None):
@@ -97,6 +97,7 @@ def write_df_to_csv(df, write_path):
         .format('csv') \
         .option("sep", ";") \
         .option("header", "false") \
+        .mode('append') \
         .save(write_path)
 
 def _read_args():

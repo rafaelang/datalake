@@ -3,7 +3,9 @@
       "Classification":"yarn-site",
       "Properties":{
          "yarn.nodemanager.pmem-check-enabled":"false",
-         "yarn.nodemanager.vmem-check-enabled":"false"
+         "yarn.nodemanager.vmem-check-enabled":"false",
+         "yarn.node-labels.enabled": "true",
+         "yarn.node-labels.am.default-node-label-expression": "CORE"
       },
       "Configurations":[
 
