@@ -1,6 +1,7 @@
 # !/usr/bin/env python
 # coding: utf-8
 
+import argparse
 import time
 import argparse 
 
@@ -146,6 +147,8 @@ if __name__ == "__main__":
     select_df = select_df.drop("items")
     select_df = select_df.drop("iscompleted")
     select_df = select_df.drop("storepreferencesdata")
+
+    select_df.cache()
 
     with_pickup_items = count_pickup_items(select_df)
 
