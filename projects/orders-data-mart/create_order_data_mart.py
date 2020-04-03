@@ -11,7 +11,7 @@ from pyspark.sql.session import SparkSession
 from pyspark.sql.types import *
 from pyspark.sql.utils import AnalysisException
 from pyspark.sql.functions import to_json, struct, col, size, explode, when, UserDefinedFunction, countDistinct, lit
-from pyspark.sql.types import Row
+from pyspark.sql.types import IntegerType, Row
 
 
 spark = SparkSession \
@@ -66,30 +66,6 @@ def create_partition_columns(df, use_last_change):
         df = df.withColumn('DAY', udf_getIntervalTime(df.creation_date, lit(DAY_INDEX)))
     return df
 
-def count_pickup_items(df):
-    order_item_has_pickup = when(col("PickupStoreInfo.IsPickupStore") == True, 1).otherwise(0)
-
-    item_df = df \
-        .select('id','subaccount','seller_order_id','order_group', explode("shippingdata.LogisticsInfo").alias("LogisticsInfo")) \
-        .select('id','subaccount','seller_order_id','order_group', "LogisticsInfo.PickupStoreInfo", "LogisticsInfo.ItemIndex") \
-        .withColumn("item_with_pickup", order_item_has_pickup) \
-        .select('id','subaccount','seller_order_id','order_group', "item_with_pickup", "ItemIndex") \
-        .groupby('id','subaccount','seller_order_id','order_group', "item_with_pickup") \
-        .agg(countDistinct('ItemIndex').alias('count'))
-
-    item_df_pickup = item_df.where(col("item_with_pickup") == 1)
-    item_df_pickup = item_df_pickup.withColumnRenamed("count", "pickup_itens")
-    item_df_pickup = item_df_pickup.drop("item_with_pickup")
-
-    item_df = item_df.drop("count", "item_with_pickup")
-    item_df = item_df.dropDuplicates()
-
-    with_pickup_items = item_df.join(item_df_pickup, on=pkeys, how='left')
-
-    with_pickup_items = with_pickup_items.na.fill(0)
-
-    return with_pickup_items
-
 def write_df_to_csv(df, write_path):
     df.repartition('YEAR','MONTH','DAY') \
         .write \
@@ -139,7 +115,9 @@ if __name__ == "__main__":
     select_df = select_df.withColumnRenamed("ordergroup", "order_group")
     select_df = select_df.withColumnRenamed("origin", "origin_code")
     select_df = select_df.withColumnRenamed("value", "total_value")
-    
+
+    select_df = select_df.dropDuplicates(subset = ['id','subaccount','seller_order_id','order_group'])
+
     select_df = select_df.withColumn("is_completed", iscompleted_to_int)
     select_df = select_df.withColumn("country_code", col("storepreferencesdata.CountryCode"))
     select_df = select_df.withColumn("currency_code", col("storepreferencesdata.CurrencyCode"))
@@ -149,16 +127,10 @@ if __name__ == "__main__":
     select_df = select_df.drop("iscompleted")
     select_df = select_df.drop("storepreferencesdata")
 
-    select_df.cache()
+    sum_array = UserDefinedFunction(lambda c: sum(c), IntegerType())
 
-    with_pickup_items = count_pickup_items(select_df)
+    select_df = select_df.withColumn("item_with_pickup", sum_array(col('shippingdata.LogisticsInfo.PickupStoreInfo.IsPickupStore').cast('array<int>')))
 
     select_df = select_df.drop('shippingdata')
 
-    orders = select_df.join(with_pickup_items, on=pkeys, how='left')
-
-    pickup_null_to_zero = when(col("pickup_itens").isNull(), 0).otherwise(col("pickup_itens"))
-    orders = orders.withColumn("pickup_itens", pickup_null_to_zero)
-    orders = orders.dropDuplicates(subset = ['id','subaccount','seller_order_id','order_group'])
-
-    write_df_to_csv(orders, s3_destination_path)
+    write_df_to_csv(select_df, s3_destination_path)
