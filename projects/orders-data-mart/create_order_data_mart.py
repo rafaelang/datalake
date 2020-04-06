@@ -16,7 +16,7 @@ from pyspark.sql.types import IntegerType, Row
 
 spark = SparkSession \
     .builder \
-    .appName('Insert orders data on data warehouse') \
+    .appName('Generate csv for data orders on data mart src.') \
     .getOrCreate()
 
 YEAR_INDEX = 0
@@ -96,7 +96,8 @@ def _read_args():
 if __name__ == "__main__":
     s3_read_path, s3_destination_path = _read_args()
 
-    df = spark.read.parquet(s3_read_path)
+    basePath = 's3://vtex.datalake/raw_data/orders/parquet_stage/'
+    df = spark.read.option("basePath", basePath).parquet(*[s3_read_path])
 
     select_df = df.select(*cols)
 
